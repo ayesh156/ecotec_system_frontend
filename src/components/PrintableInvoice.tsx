@@ -1,0 +1,779 @@
+import { forwardRef } from 'react';
+import type { Invoice, Customer } from '../data/mockData';
+import { Building2 } from 'lucide-react';
+import defaultLogo from '../assets/logo.png';
+
+interface InvoiceItemWithWarranty {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  originalPrice?: number;
+  total: number;
+  warrantyDueDate?: string;
+  warranty?: string; // Product warranty period (e.g., "1 year", "6 months")
+}
+
+// Branding settings for PDF header
+export interface InvoiceBranding {
+  name?: string;
+  subName?: string;
+  logo?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  tagline?: string;
+}
+
+interface PrintableInvoiceProps {
+  invoice: Invoice & {
+    buyingDate?: string;
+    items: InvoiceItemWithWarranty[];
+  };
+  customer?: Customer | null;
+  branding?: InvoiceBranding;
+}
+
+export const PrintableInvoice = forwardRef<HTMLDivElement, PrintableInvoiceProps>(
+  ({ invoice, customer, branding }, ref) => {
+    // Use branding values with fallbacks
+    const shopName = branding?.name || 'ECO SYSTEM COMPUTER';
+    const shopSubName = branding?.subName || 'SOLUTIONS';
+    const hasCustomLogo = branding?.logo && branding.logo !== defaultLogo;
+    const shopLogo = branding?.logo || defaultLogo;
+    const shopAddress = branding?.address || 'No.14, Mulatiyana junction, Mulatiyana, Matara.';
+    const shopPhone = branding?.phone || '0711453111';
+    const shopEmail = branding?.email || 'ecosystemcomputersolutions@gmail.com';
+
+    // Check if this is a walk-in customer
+    const isWalkIn = invoice.customerId === 'walk-in' || 
+                     invoice.customerName?.toLowerCase().includes('walk-in') ||
+                     invoice.customerName?.toLowerCase().includes('walkin');
+
+    const formatCurrency = (amount: number) => {
+      return `LKR ${amount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}`;
+    };
+
+    const formatDate = (dateString: string) => {
+      return new Date(dateString).toLocaleDateString('en-GB', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).split('/').reverse().join('-');
+    };
+
+    return (
+      <div ref={ref} className="print-invoice">
+        <style>{`
+          /* ═══════════════════════════════════════════════════════════════
+             INK-EFFICIENT B&W PRINT OPTIMIZED - ECO SYSTEM INVOICE
+             Designed for black laser/inkjet printers to minimize ink usage
+             ═══════════════════════════════════════════════════════════════ */
+          
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm;
+            }
+            
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 210mm !important;
+              background: white !important;
+            }
+            
+            .print-invoice {
+              width: 100% !important;
+              max-width: none !important;
+              min-height: auto !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              background: white !important;
+              color: #000 !important;
+              font-family: 'Segoe UI', 'Arial', sans-serif !important;
+              font-size: 10pt !important;
+            }
+            
+            .no-print {
+              display: none !important;
+            }
+
+            table {
+              page-break-inside: avoid;
+            }
+          }
+          
+          /* A4 Portrait - 210mm x 297mm */
+          .print-invoice {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 12mm 15mm;
+            margin: 0 auto;
+            background: white;
+            color: #000;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            box-sizing: border-box;
+          }
+
+          /* HEADER - Company Info - INK EFFICIENT */
+          .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            margin-bottom: 8px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #000;
+          }
+
+
+          .company-section {
+            display: flex;
+            align-items: stretch;
+            gap: 12px;
+          }
+
+          .company-logo {
+            width: auto;
+            height: auto;
+            max-width: 120px;
+            max-height: 80px;
+            align-self: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            flex-shrink: 0;
+            overflow: visible;
+          }
+
+          .company-logo img {
+            width: auto;
+            height: auto;
+            max-width: 120px;
+            max-height: 80px;
+            object-fit: contain;
+          }
+
+          .company-logo svg {
+            width: 28px;
+            height: 28px;
+          }
+
+          .company-info h1 {
+            font-size: 16pt;
+            font-weight: 700;
+            color: #000;
+            margin: 0 0 1px 0;
+            letter-spacing: -0.3px;
+          }
+
+          .company-info .sub-name {
+            font-size: 9pt;
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 6px;
+          }
+
+          .company-info .details {
+            font-size: 8pt;
+            color: #000;
+            line-height: 1.4;
+          }
+
+          .contact-box {
+            text-align: right;
+          }
+
+          .contact-box h3 {
+            font-size: 9pt;
+            font-weight: 600;
+            color: #000;
+            margin: 0 0 4px 0;
+            text-decoration: underline;
+          }
+
+          .contact-box .info {
+            font-size: 8pt;
+            color: #000;
+            line-height: 1.5;
+          }
+
+          /* TITLE SECTION - NO BACKGROUND FILL */
+          .invoice-title-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 15px 18px;
+            margin-bottom: 15px;
+            background: white;
+            border: 2px solid #000;
+          }
+
+          .invoice-title h2 {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #000;
+            margin: 0 0 2px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+
+          .invoice-title .company-label {
+            font-size: 8pt;
+            color: #000;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .amount-due {
+            text-align: right;
+          }
+
+          .amount-due label {
+            font-size: 8pt;
+            color: #000;
+            font-weight: 600;
+            text-decoration: underline;
+          }
+
+          .amount-due .amount {
+            font-size: 20pt;
+            font-weight: 700;
+            color: #000;
+            font-family: 'Consolas', 'Monaco', monospace;
+          }
+
+          /* INVOICE META - Bill To & Details */
+          .invoice-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 18px;
+            gap: 20px;
+          }
+
+          .bill-to {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #000;
+          }
+
+          .bill-to label {
+            font-size: 7pt;
+            color: #000;
+            display: block;
+            margin-bottom: 2px;
+            font-weight: 600;
+            text-transform: uppercase;
+          }
+
+          .bill-to .name {
+            font-size: 11pt;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 2px;
+          }
+
+          .bill-to .info {
+            font-size: 8pt;
+            color: #000;
+            line-height: 1.4;
+          }
+
+          .invoice-details {
+            text-align: right;
+          }
+
+          .invoice-details .row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-bottom: 4px;
+            font-size: 8pt;
+          }
+
+          .invoice-details .row label {
+            color: #000;
+            font-weight: 500;
+          }
+
+          .invoice-details .row .value {
+            color: #000;
+            font-weight: 600;
+            min-width: 90px;
+            text-align: right;
+          }
+
+          /* ITEMS TABLE - MINIMAL INK */
+          .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+          }
+
+          .items-table thead th {
+            background: white;
+            color: #000;
+            font-size: 8pt;
+            font-weight: 700;
+            padding: 8px 10px;
+            text-align: left;
+            border: 1px solid #000;
+            border-bottom: 2px solid #000;
+            text-transform: uppercase;
+          }
+
+          .items-table thead th:first-child {
+            width: 50%;
+          }
+
+          .items-table thead th:nth-child(2) {
+            width: 10%;
+            text-align: center;
+          }
+
+          .items-table thead th:nth-child(3),
+          .items-table thead th:nth-child(4) {
+            width: 20%;
+            text-align: right;
+          }
+
+          .items-table tbody tr {
+            border-bottom: 1px solid #000;
+          }
+
+          .items-table tbody td {
+            padding: 10px;
+            font-size: 9pt;
+            color: #000;
+            vertical-align: top;
+            border-left: 1px solid #000;
+            border-right: 1px solid #000;
+          }
+
+          .items-table tbody td:first-child .product-name {
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 2px;
+          }
+
+          .items-table tbody td:first-child .product-desc {
+            font-size: 7pt;
+            color: #000;
+            line-height: 1.3;
+            font-style: italic;
+          }
+
+          .items-table tbody td:nth-child(2) {
+            text-align: center;
+            font-weight: 600;
+          }
+
+          .items-table tbody td:nth-child(3),
+          .items-table tbody td:nth-child(4) {
+            text-align: right;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 8pt;
+          }
+
+          .items-table tbody td:nth-child(4) {
+            font-weight: 700;
+            color: #000;
+          }
+
+          /* TOTALS SECTION */
+          .totals-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 18px;
+            gap: 25px;
+          }
+
+          .payment-info {
+            flex: 1;
+          }
+
+          .payment-info h4 {
+            font-size: 8pt;
+            font-weight: 700;
+            color: #000;
+            margin: 0 0 4px 0;
+            text-decoration: underline;
+          }
+
+          .payment-info p {
+            font-size: 8pt;
+            color: #000;
+            margin: 0;
+          }
+
+          .totals-box {
+            width: 220px;
+            border: 1px solid #000;
+            padding: 10px;
+          }
+
+          .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 8pt;
+            border-bottom: 1px dotted #000;
+          }
+
+          .totals-row .label {
+            color: #000;
+          }
+
+          .totals-row .value {
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #000;
+            font-weight: 500;
+          }
+
+          .totals-row.total {
+            border-bottom: none;
+            padding-top: 8px;
+            margin-top: 4px;
+            border-top: 2px solid #000;
+          }
+
+          .totals-row.total .label {
+            font-weight: 700;
+            color: #000;
+            text-transform: uppercase;
+          }
+
+          .totals-row.total .value {
+            font-size: 11pt;
+            font-weight: 700;
+            color: #000;
+          }
+
+          /* BALANCE DUE BOX - INK EFFICIENT STYLING */
+          .balance-due-box {
+            background: #fff;
+            border: 2px solid #000;
+            padding: 12px 15px;
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+
+          .balance-due-box .label {
+            font-size: 10pt;
+            font-weight: 800;
+            color: #000;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .balance-due-box .value {
+            font-size: 13pt;
+            font-weight: 900;
+            color: #000;
+            font-family: 'Consolas', 'Monaco', monospace;
+          }
+
+          .balance-due-note {
+            text-align: center;
+            font-size: 7pt;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
+          }
+
+          /* NOTES SECTION - NO BACKGROUND */
+          .notes-section {
+            background: white;
+            border: 1px solid #000;
+            padding: 10px 12px;
+            margin-bottom: 15px;
+          }
+
+          .notes-section h4 {
+            font-size: 8pt;
+            font-weight: 700;
+            color: #000;
+            margin: 0 0 6px 0;
+            text-transform: uppercase;
+            border-bottom: 1px solid #000;
+            padding-bottom: 4px;
+          }
+
+          .notes-section p {
+            font-size: 7pt;
+            color: #000;
+            margin: 0;
+            line-height: 1.5;
+          }
+
+          /* FOOTER */
+          .footer-section {
+            border-top: 2px solid #000;
+            padding-top: 12px;
+          }
+
+          .footer-section h4 {
+            font-size: 7pt;
+            font-weight: 700;
+            color: #000;
+            margin: 0 0 3px 0;
+          }
+
+          .footer-section p {
+            font-size: 7pt;
+            color: #000;
+            margin: 0;
+            line-height: 1.5;
+          }
+
+          .footer-thank-you {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 12px;
+            border-top: 1px dashed #000;
+            font-size: 9pt;
+            font-weight: 600;
+            color: #000;
+          }
+        `}</style>
+
+        {/* Header */}
+        <div className="invoice-header">
+          <div className="company-section">
+            <div className="company-logo">
+              {hasCustomLogo ? (
+                <img src={shopLogo} alt="Shop Logo" />
+              ) : (
+                <div style={{ 
+                  width: '70px', 
+                  height: '70px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  background: 'linear-gradient(135deg, #10b981 0%, #3b82f6 100%)',
+                  borderRadius: '12px'
+                }}>
+                  <Building2 style={{ width: '40px', height: '40px', color: 'white', strokeWidth: 2 }} />
+                </div>
+              )}
+            </div>
+            <div className="company-info">
+              <h1>{shopName}</h1>
+              {shopSubName && <div className="sub-name">{shopSubName}</div>}
+              <div className="details">
+                {shopAddress.split(',').map((line, i, arr) => (
+                  <span key={i}>
+                    {line.trim()}
+                    {i < arr.length - 1 && <br />}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="contact-box">
+            <h3>Contact information</h3>
+            <div className="info">
+              {shopEmail}<br />
+              {shopPhone}
+            </div>
+          </div>
+        </div>
+
+        {/* Invoice Title Section */}
+        <div className="invoice-title-section">
+          <div className="invoice-title">
+            <h2>{shopName.split(' ')[0]} INVOICE</h2>
+            <div className="company-label">{shopName} {shopSubName}</div>
+          </div>
+          <div className="amount-due">
+            <label>Amount Due (LKR)</label>
+            <div className="amount">{invoice.total.toLocaleString('en-LK', { minimumFractionDigits: 2 })}</div>
+          </div>
+        </div>
+
+        {/* Bill To & Invoice Details */}
+        <div className="invoice-meta">
+          <div className="bill-to">
+            <label>Bill to:</label>
+            {isWalkIn ? (
+              <>
+                <div className="name">Walk-in Customer</div>
+                <div className="info" style={{ fontStyle: 'italic', color: '#666' }}>
+                  Cash Sale
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="name">{invoice.customerName}</div>
+                {customer && customer.email && (
+                  <div className="info">
+                    Email: {customer.email}<br />
+                    Phone: {customer.phone}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <div className="invoice-details">
+            <div className="row">
+              <label>Invoice Number:</label>
+              <span className="value">{invoice.id.replace('INV-', '')}</span>
+            </div>
+            <div className="row">
+              <label>Invoice Date:</label>
+              <span className="value">{formatDate(invoice.date)}</span>
+            </div>
+            <div className="row">
+              <label>Payment Due:</label>
+              <span className="value">{formatDate(invoice.dueDate)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Items Table */}
+        <table className="items-table">
+          <thead>
+            <tr>
+              <th>Items</th>
+              <th>Qty</th>
+              <th>Price</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoice.items.map((item, index) => {
+              // Format warranty into short code (e.g., "1 year" -> "1Y", "6 months" -> "6M", "No Warranty" -> "N/W")
+              const formatWarrantyCode = (warranty?: string): string => {
+                if (!warranty) return 'N/W';
+                const w = warranty.toLowerCase().trim();
+                if (w.includes('lifetime') || w.includes('life time')) return 'L/W';
+                if (w.includes('no warranty') || w === 'n/w' || w === 'none') return 'N/W';
+                // Match patterns like "1 year", "2 years", "6 months", "3 month"
+                const yearMatch = w.match(/(\d+)\s*y(ear)?s?/i);
+                if (yearMatch) return `${yearMatch[1]}Y`;
+                const monthMatch = w.match(/(\d+)\s*m(onth)?s?/i);
+                if (monthMatch) return `${monthMatch[1]}M`;
+                const weekMatch = w.match(/(\d+)\s*w(eek)?s?/i);
+                if (weekMatch) return `${weekMatch[1]}W`;
+                const dayMatch = w.match(/(\d+)\s*d(ay)?s?/i);
+                if (dayMatch) return `${dayMatch[1]}D`;
+                // If can't parse, return abbreviated version
+                return warranty.length > 5 ? warranty.substring(0, 5) : warranty;
+              };
+              
+              return (
+                <tr key={index}>
+                  <td>
+                    <div className="product-name">
+                      {item.productName}
+                      {item.warranty && (
+                        <span style={{ marginLeft: '8px', fontSize: '7pt', fontWeight: '600', color: '#333', background: '#f0f0f0', padding: '1px 4px', borderRadius: '3px' }}>
+                          [{formatWarrantyCode(item.warranty)}]
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>{item.quantity}</td>
+                  <td>
+                    {item.originalPrice && item.originalPrice !== item.unitPrice ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <span style={{ textDecoration: 'line-through', fontSize: '7pt' }}>
+                          {formatCurrency(item.originalPrice)}
+                        </span>
+                        <span style={{ fontWeight: '600' }}>
+                          {formatCurrency(item.unitPrice)}
+                        </span>
+                      </div>
+                    ) : (
+                      formatCurrency(item.unitPrice)
+                    )}
+                  </td>
+                  <td>{formatCurrency(item.total)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Payment Info & Totals */}
+        <div className="totals-section">
+          <div className="payment-info">
+            <h4>Payment Instruction</h4>
+            <p>Payment</p>
+          </div>
+          <div className="totals-box">
+            <div className="totals-row">
+              <span className="label">Sub Total:</span>
+              <span className="value">{formatCurrency(invoice.subtotal)}</span>
+            </div>
+            {invoice.tax > 0 && (
+              <div className="totals-row">
+                <span className="label">Total tax:</span>
+                <span className="value">{formatCurrency(invoice.tax)}</span>
+              </div>
+            )}
+            <div className="totals-row total">
+              <span className="label">Grand total:</span>
+              <span className="value">{formatCurrency(invoice.total)}</span>
+            </div>
+            {/* Paid Amount - if partial payment */}
+            {(invoice.paidAmount ?? 0) > 0 && (invoice.paidAmount ?? 0) < invoice.total && (
+              <div className="totals-row" style={{ borderBottom: 'none', paddingTop: '6px' }}>
+                <span className="label">Paid Amount:</span>
+                <span className="value" style={{ color: '#000000', fontWeight: '600' }}>{formatCurrency(invoice.paidAmount ?? 0)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Balance Due Box - Only show if there's a balance */}
+        {((invoice.dueAmount ?? 0) > 0 || (invoice.total - ((invoice.paidAmount ?? 0))) > 0) && (
+          <div style={{ marginBottom: '15px' }}>
+            <div className="balance-due-box">
+              <span className="label">⚠ BALANCE DUE:</span>
+              <span className="value">{formatCurrency((invoice.dueAmount ?? 0) || (invoice.total - ((invoice.paidAmount ?? 0))))}</span>
+            </div>
+            <p className="balance-due-note">Please settle the outstanding balance at your earliest convenience</p>
+          </div>
+        )}
+
+        {/* Notes / Terms */}
+        <div className="notes-section">
+          <h4>Notes / Terms</h4>
+          <p>
+            PLEASE PRODUCE THE INVOICE FOR WARRANTY. NO WARRANTY FOR CHIP BURNS, PHYSICAL DAMAGE OR CORROSION. 
+            Warranty covers only manufacturer's defects. Damage or defect due to other causes such as negligence, 
+            misuses, improper operation, power fluctuation, lightening, or other natural disasters, sabotage, or accident etc. 
+            (01M) = 30 Days, (03M) = 90 Days, (06M) = 180 Days, (01Y) = 350 Days, (02Y) = 700 Days, (03Y) = 1050 Days, 
+            (05Y) = 1750 Days, (10Y) = 3500 Days, (L/W) = Lifetime Warranty. (N/W) = No Warranty).
+          </p>
+          {invoice.notes && (
+            <p style={{ marginTop: '8px', paddingTop: '4px', borderTop: '1px dotted #000' }}>
+              {invoice.notes}
+            </p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="footer-section">
+          <p>We know the world is full of choices. Thank you for selecting us.</p>
+        </div>
+
+        <div className="footer-thank-you">
+          Thank you for your business!
+        </div>
+      </div>
+    );
+  }
+);
+
+PrintableInvoice.displayName = 'PrintableInvoice';
+
+export default PrintableInvoice;
