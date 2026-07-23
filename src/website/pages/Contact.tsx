@@ -1,4 +1,4 @@
-import { Box, Container, Typography, Grid, TextField, Button, Card } from '@mui/material';
+import { Box, Typography, Grid, TextField, Button, Card } from '@mui/material';
 import { LocationOn, Phone, Email, WhatsApp, Send } from '@mui/icons-material';
 import { storeInfo } from '../data/products';
 

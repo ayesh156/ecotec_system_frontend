@@ -50,7 +50,7 @@ type RoleFilter = 'all' | 'MANAGER' | 'STAFF';
 
 export const Settings: React.FC = () => {
   const { theme, toggleTheme, accentColor, setAccentColor, accent } = useTheme();
-  const { user, isViewingShop, viewingShop, getAccessToken } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const { settings: whatsAppSettings, shopDetails, updateSettings, saveSettings, resetToDefaults, resetGrnToDefaults, defaultTemplates } = useWhatsAppSettings();
   const { branding, updateBranding, saveBranding, hasUnsavedChanges: brandingHasUnsavedChanges } = useShopBranding();
   const { settings: taxSettings, updateSettings: updateTaxSettings, saveSettings: saveTaxSettings } = useTaxSettings();
@@ -66,15 +66,15 @@ export const Settings: React.FC = () => {
   // Check if user is Super Admin - hide business-specific settings unless viewing a shop
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isShopAdmin = user?.role === 'ADMIN';
-  const canViewBusinessSettings = !isSuperAdmin || (isSuperAdmin && isViewingShop);
+  const canViewBusinessSettings = !isSuperAdmin;
   // Shop Admin settings (Sections, Users tabs) visible for:
   // - SUPER_ADMIN viewing a shop
   // - Shop ADMIN (can manage sections for their users)
   // NOT visible for regular shop users (USER role)
-  const canViewShopAdminSettings = isShopAdmin || (isSuperAdmin && isViewingShop);
+  const canViewShopAdminSettings = isShopAdmin;
   
   // Get the effective shop (either viewed shop for SUPER_ADMIN or user's own shop)
-  const effectiveShop = isViewingShop && viewingShop ? viewingShop : user?.shop;
+  const effectiveShop = user?.shop;
   
   const [copiedPlaceholder, setCopiedPlaceholder] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'appearance' | 'profile' | 'notifications' | 'grn' | 'invoice' | 'supplierOrders' | 'sections' | 'branding' | 'users'>('appearance');
@@ -157,7 +157,7 @@ export const Settings: React.FC = () => {
 
   // Save theme/accent settings to database (called from handleSave)
   const saveThemeToDatabase = async (newTheme?: string, newAccent?: string) => {
-    const shopId = isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id;
+    const shopId = user?.shop?.id;
     const token = getAccessToken();
     if (!shopId || !token) return;
 
@@ -191,7 +191,7 @@ export const Settings: React.FC = () => {
 
   // Handle accent color change — apply locally, defer DB save to Save button
   const handleAccentChange = (color: string) => {
-    if (!(isSuperAdmin && isViewingShop)) {
+    if (!isSuperAdmin) {
       // Apply the accent preview immediately (visual only)
       setAccentColor(color as any);
       if (isSuperAdmin) {
@@ -256,7 +256,7 @@ export const Settings: React.FC = () => {
     setUsersLoading(true);
     setUsersError(null);
     const token = getAccessToken();
-    const shopIdParam = viewingShop ? `?shopId=${viewingShop.id}` : '';
+    const shopIdParam = '';
 
     try {
       const res = await fetch(`${API_URL}/shop-admin/users${shopIdParam}`, {
@@ -293,22 +293,18 @@ export const Settings: React.FC = () => {
 
   // Only fetch users once per shop (not on every tab switch)
   useEffect(() => {
-    const currentShopId = viewingShop?.id || 'current';
+    const currentShopId = 'current';
     // Only fetch if we're on users tab AND haven't loaded for this shop yet
     if (canViewShopAdminSettings && activeTab === 'users' && usersLoadedForShop !== currentShopId) {
       fetchShopUsers();
       setUsersLoadedForShop(currentShopId);
     }
-  }, [canViewShopAdminSettings, activeTab, viewingShop?.id, usersLoadedForShop]);
+  }, [canViewShopAdminSettings, activeTab, usersLoadedForShop]);
 
   // Reset loaded state when shop changes
   useEffect(() => {
-    const currentShopId = viewingShop?.id || 'current';
-    if (usersLoadedForShop && usersLoadedForShop !== currentShopId) {
-      setUsersLoadedForShop(null);
-      setShopUsers([]);
-    }
-  }, [viewingShop?.id]);
+    // Reset loaded state when needed
+  }, []);
 
   // Reset page when filters change
   useEffect(() => {
@@ -426,9 +422,7 @@ export const Settings: React.FC = () => {
 
       try {
         const token = getAccessToken();
-        const bodyData = viewingShop 
-          ? { ...formData, shopId: viewingShop.id }
-          : formData;
+        const bodyData = formData;
         
         const response = await fetch(`${API_URL}/shop-admin/users`, {
           method: 'POST',
@@ -547,10 +541,9 @@ export const Settings: React.FC = () => {
                 options={[
                   { value: 'STAFF', label: 'Staff', icon: <Users className="w-4 h-4 text-slate-500" /> },
                   { value: 'MANAGER', label: 'Manager', icon: <UserCog className="w-4 h-4 text-blue-500" /> },
-                  ...(viewingShop ? [{ value: 'ADMIN', label: 'Admin', icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" /> }] : []),
-                ]}
-                value={formData.role}
-                onValueChange={(val) => setFormData({ ...formData, role: val as 'ADMIN' | 'MANAGER' | 'STAFF' })}
+                  ]}
+                  value={formData.role}
+                  onValueChange={(val) => setFormData({ ...formData, role: val as 'ADMIN' | 'MANAGER' | 'STAFF' })}
                 placeholder="Select role"
                 searchPlaceholder="Search role..."
                 theme={theme}
@@ -615,7 +608,7 @@ export const Settings: React.FC = () => {
 
       try {
         const token = getAccessToken();
-        const shopIdParam = viewingShop ? `?shopId=${viewingShop.id}` : '';
+        const shopIdParam = '';
         const response = await fetch(`${API_URL}/shop-admin/users/${editUser.id}${shopIdParam}`, {
           method: 'PUT',
           headers: {
@@ -729,7 +722,7 @@ export const Settings: React.FC = () => {
               <label className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
                 Role
               </label>
-              {(editUser.role === 'ADMIN' && !viewingShop) || isEditingOwnProfile ? (
+              {isEditingOwnProfile ? (
                 <div className={`px-4 py-2.5 rounded-xl border flex items-center ${
                   theme === 'dark'
                     ? 'bg-slate-800/30 border-slate-700/30 text-slate-400'
@@ -743,7 +736,6 @@ export const Settings: React.FC = () => {
                   options={[
                     { value: 'STAFF', label: 'Staff', icon: <Users className="w-4 h-4 text-slate-500" /> },
                     { value: 'MANAGER', label: 'Manager', icon: <UserCog className="w-4 h-4 text-blue-500" /> },
-                    ...(viewingShop ? [{ value: 'ADMIN', label: 'Admin', icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" /> }] : []),
                   ]}
                   value={formData.role}
                   onValueChange={(val) => setFormData({ ...formData, role: val as 'ADMIN' | 'MANAGER' | 'STAFF' })}
@@ -754,7 +746,7 @@ export const Settings: React.FC = () => {
               )}
             </div>
 
-            {((editUser.role !== 'ADMIN' || viewingShop) && !isEditingOwnProfile) && (
+            {(!isEditingOwnProfile) && (
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -817,7 +809,7 @@ export const Settings: React.FC = () => {
 
       try {
         const token = getAccessToken();
-        const shopIdParam = viewingShop ? `?shopId=${viewingShop.id}` : '';
+        const shopIdParam = '';
         const response = await fetch(`${API_URL}/shop-admin/users/${resetUser.id}/reset-password${shopIdParam}`, {
           method: 'PUT',
           headers: {
@@ -956,7 +948,7 @@ export const Settings: React.FC = () => {
 
       try {
         const token = getAccessToken();
-        const shopIdParam = viewingShop ? `?shopId=${viewingShop.id}` : '';
+        const shopIdParam = '';
         const response = await fetch(`${API_URL}/shop-admin/users/${deleteUser.id}${shopIdParam}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
@@ -1288,29 +1280,7 @@ export const Settings: React.FC = () => {
 
       <div className="max-w-6xl mx-auto px-3 sm:px-4">
         {/* Shop Viewing Banner for SUPER_ADMIN */}
-        {isSuperAdmin && isViewingShop && viewingShop && (
-          <div className={`mb-6 rounded-2xl border p-4 ${
-            theme === 'dark' 
-              ? 'bg-amber-500/10 border-amber-500/30' 
-              : 'bg-amber-50 border-amber-200'
-          }`}>
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl ${
-                theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-100'
-              }`}>
-                <Building2 className="w-5 h-5 text-amber-500" />
-              </div>
-              <div>
-                <p className={`font-medium ${theme === 'dark' ? 'text-amber-400' : 'text-amber-700'}`}>
-                  Viewing Settings for: {viewingShop.name}
-                </p>
-                <p className={`text-sm ${theme === 'dark' ? 'text-amber-400/70' : 'text-amber-600'}`}>
-                  You are viewing this shop's settings as Super Admin
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Shop Viewing Banner removed in single-shop mode */}
 
         {/* Modern Tab Navigation - World Class Design - Samsung S20 (360px) + iPad Mini (768px) optimized */}
         <div className={`rounded-xl sm:rounded-2xl p-1 sm:p-1.5 mb-4 sm:mb-6 md:mb-8 ${
@@ -3056,7 +3026,7 @@ export const Settings: React.FC = () => {
                       <span className="hidden sm:inline">Manage users for</span>
                       <span className="sm:hidden">Users:</span>
                       <span className={`font-medium truncate ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>
-                        {viewingShop?.name || effectiveShop?.name}
+                        {effectiveShop?.name}
                       </span>
                     </p>
                   </div>
@@ -3174,8 +3144,8 @@ export const Settings: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {paginatedUsers.map((usr) => {
                   const isCurrentUser = usr.id === user?.id;
-                  const canEditUser = usr.role !== 'ADMIN' || viewingShop || isCurrentUser;
-                  const canDeleteUser = (usr.role !== 'ADMIN' || viewingShop) && !isCurrentUser;
+                  const canEditUser = usr.role !== 'ADMIN' || isCurrentUser;
+                  const canDeleteUser = usr.role !== 'ADMIN' && !isCurrentUser;
                   
                   return (
                   <div
@@ -3268,8 +3238,8 @@ export const Settings: React.FC = () => {
                   <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-700/50' : 'divide-slate-200'}`}>
                     {paginatedUsers.map((usr) => {
                       const isCurrentUser = usr.id === user?.id;
-                      const canEditUser = usr.role !== 'ADMIN' || viewingShop || isCurrentUser;
-                      const canDeleteUser = (usr.role !== 'ADMIN' || viewingShop) && !isCurrentUser;
+                      const canEditUser = usr.role !== 'ADMIN' || isCurrentUser;
+                      const canDeleteUser = usr.role !== 'ADMIN' && !isCurrentUser;
                       
                       return (
                       <tr key={usr.id} className={`transition-colors ${

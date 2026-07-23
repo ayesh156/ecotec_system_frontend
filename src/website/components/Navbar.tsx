@@ -12,7 +12,6 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  InputBase,
   Typography,
   useMediaQuery,
   useTheme,
@@ -23,14 +22,11 @@ import {
   ShoppingCart,
   Menu as MenuIcon,
   Close,
-  Search,
   Home,
   Category,
   Info,
   ContactMail,
   Build,
-  FavoriteBorder,
-  Person,
 } from '@mui/icons-material';
 import { useCart } from '../context/CartContext';
 
@@ -45,7 +41,6 @@ const navLinks = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));

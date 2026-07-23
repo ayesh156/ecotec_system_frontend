@@ -58,8 +58,8 @@ export const GRNPaymentModal: React.FC<GRNPaymentModalProps> = ({
   isProcessing: externalProcessing = false,
 }) => {
   const { theme } = useTheme();
-  const { user, isViewingShop, viewingShop, getAccessToken } = useAuth();
-  const shopId = isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id;
+  const { user, getAccessToken } = useAuth();
+  const shopId = user?.shop?.id;
   
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');

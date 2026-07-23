@@ -36,7 +36,7 @@ export const ReminderHistoryModal: React.FC<ReminderHistoryModalProps> = ({
   title,
 }) => {
   const { theme } = useTheme();
-  const { isViewingShop, viewingShop, user } = useAuth();
+  const { user } = useAuth();
   const [reminders, setReminders] = useState<InvoiceReminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export const ReminderHistoryModal: React.FC<ReminderHistoryModalProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const effectiveShopId = isViewingShop && viewingShop?.id ? viewingShop.id : user?.shop?.id;
+  const effectiveShopId = user?.shop?.id;
 
   useEffect(() => {
     if (isOpen && (invoiceId || customerId)) {

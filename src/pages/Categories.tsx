@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
 import { productCategories, mockProducts, categoryImages } from '../data/mockData';
 import { categoryService } from '../services/categoryService';
 import { CategoryFormModal } from '../components/modals/CategoryFormModal';
@@ -56,8 +55,7 @@ const defaultCategoryIcons: Record<string, string> = {
 
 export const Categories: React.FC = () => {
   const { theme } = useTheme();
-  const { isViewingShop, viewingShop } = useAuth();
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const effectiveShopId = undefined;
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [sortBy, setSortBy] = useState<'name' | 'products' | 'date'>('date');

@@ -60,7 +60,6 @@ const AIChat = lazy(() => import('./pages/AIChat').then(m => ({ default: m.AICha
 const Notes = lazy(() => import('./pages/Notes').then(m => ({ default: m.Notes })));
 const Calendar = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const DataExport = lazy(() => import('./pages/DataExport').then(m => ({ default: m.DataExport })));
-const AdminDashboard = lazy(() => import('./pages/admin').then(m => ({ default: m.AdminDashboard })));
 const ShopAdminPanel = lazy(() => import('./pages/admin').then(m => ({ default: m.ShopAdminPanel })));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
@@ -76,16 +75,6 @@ const queryClient = new QueryClient({
 });
 
 // Lightweight top-progress bar spinner for public website routes
-function PublicRouteFallback() {
-  return (
-    <div className="fixed top-0 left-0 right-0 z-[9999]">
-      <div className="h-1 bg-emerald-500/30 overflow-hidden">
-        <div className="h-full w-full bg-emerald-500 animate-[loading-progress_1.5s_ease-in-out_infinite]" style={{ width: '30%' }} />
-      </div>
-    </div>
-  );
-}
-
 // Inject the loading progress keyframe animation into the document
 const loadingProgressStyleId = 'public-route-loader-style';
 if (typeof document !== 'undefined' && !document.getElementById(loadingProgressStyleId)) {

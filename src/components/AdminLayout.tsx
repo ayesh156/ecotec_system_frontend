@@ -38,7 +38,7 @@ interface AdminLayoutProps {
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
-  const { theme, toggleTheme, aiAutoFillEnabled, toggleAiAutoFill, setAccentColor } = useTheme();
+  const { theme, toggleTheme, aiAutoFillEnabled, toggleAiAutoFill } = useTheme();
   const { user, logout } = useAuth();
   const { branding } = useShopBranding();
   const { isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, isLoading: sectionsLoading } = useShopSections();
@@ -358,7 +358,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     console.log('Hidden sections (SuperAdmin):', hiddenSections);
     console.log('Admin hidden sections:', adminHiddenSections);
     
-    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     const isShopAdmin = user?.role === 'ADMIN';
     
     if (false) {
@@ -428,7 +427,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
   // Filter hidden sections from bottom nav items
   const bottomNavItems = useMemo(() => {
-    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     const isShopAdmin = user?.role === 'ADMIN';
     
     if (false) {

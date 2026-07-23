@@ -51,10 +51,10 @@ const convertAPICustomerToFrontend = (apiCustomer: APICustomer): Customer => ({
 export const Customers: React.FC = () => {
   const { theme } = useTheme();
   const { setCustomers: setCachedCustomers, setInvoices: setCachedInvoices } = useDataCache();
-  const { user, isViewingShop, viewingShop } = useAuth();
+  const { user } = useAuth();
   
   // Get effective shopId for SUPER_ADMIN viewing a shop
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const effectiveShopId = undefined;
   
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -112,7 +112,7 @@ export const Customers: React.FC = () => {
   const { branding } = useShopBranding();
   
   // Get effective shop - use viewing shop for SUPER_ADMIN, otherwise user's shop
-  const effectiveShop = isViewingShop && viewingShop ? viewingShop : user?.shop;
+  const effectiveShop = user?.shop;
   
   // Helper to get first non-empty value
   const getFirstNonEmpty = (...values: (string | null | undefined)[]): string => {

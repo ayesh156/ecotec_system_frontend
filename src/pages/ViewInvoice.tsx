@@ -31,14 +31,14 @@ export const ViewInvoice: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user, isViewingShop, viewingShop } = useAuth();
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const { user } = useAuth();
+  const effectiveShopId = undefined;
   const { settings: whatsAppSettings, shopDetails } = useWhatsAppSettings();
   const { branding } = useShopBranding();
   const isMobile = useIsMobile();
   
   // Get effective shop - use viewing shop for SUPER_ADMIN, otherwise user's shop
-  const effectiveShop = isViewingShop && viewingShop ? viewingShop : user?.shop;
+  const effectiveShop = user?.shop;
   
   // Helper to get first non-empty value
   const getFirstNonEmpty = (...values: (string | null | undefined)[]): string => {

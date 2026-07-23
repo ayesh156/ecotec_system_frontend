@@ -35,7 +35,7 @@ export const Invoices: React.FC = () => {
   const navigate = useNavigate();
   const { settings: whatsAppSettings, shopDetails } = useWhatsAppSettings();
   const { branding } = useShopBranding();
-  const { user, isViewingShop, viewingShop } = useAuth();
+  const { user } = useAuth();
   const { 
     invoices: cachedInvoices, 
     loadInvoices, 
@@ -48,10 +48,10 @@ export const Invoices: React.FC = () => {
   } = useDataCache();
   
   // Get effective shopId for SUPER_ADMIN viewing a shop
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const effectiveShopId = undefined;
   
   // Get effective shop - use viewing shop for SUPER_ADMIN, otherwise user's shop
-  const effectiveShop = isViewingShop && viewingShop ? viewingShop : user?.shop;
+  const effectiveShop = user?.shop;
   
   // Helper to get first non-empty value
   const getFirstNonEmpty = (...values: (string | null | undefined)[]): string => {

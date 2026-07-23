@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
 import { useIsMobile } from '../hooks/use-mobile';
 import { productBrands, mockProducts, brandLogos } from '../data/mockData';
 import { brandService } from '../services/brandService';
@@ -27,11 +26,10 @@ interface ExtendedBrand extends Brand {
 
 export const Brands: React.FC = () => {
   const { theme } = useTheme();
-  const { isViewingShop, viewingShop } = useAuth();
   const isMobile = useIsMobile();
   
   // Get effective shopId for SUPER_ADMIN viewing a shop
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const effectiveShopId = undefined;
   
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');

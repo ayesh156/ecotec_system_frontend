@@ -7,7 +7,6 @@ import {
   Button,
   Grid,
   Card,
-  CardContent,
   Avatar,
   Divider,
 } from '@mui/material';

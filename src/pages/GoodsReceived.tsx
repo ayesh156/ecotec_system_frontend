@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppSettings } from '../contexts/WhatsAppSettingsContext';
 import { useShopBranding } from '../contexts/ShopBrandingContext';
 import type { GoodsReceivedNote, GRNStatus } from '../data/mockData';
@@ -58,12 +57,11 @@ type ViewMode = 'grid' | 'table';
 
 export const GoodsReceived: React.FC = () => {
   const { theme } = useTheme();
-  const { isViewingShop, viewingShop } = useAuth();
   const { settings: whatsAppSettings } = useWhatsAppSettings();
   const { branding } = useShopBranding();
   
   // Get effective shopId for SUPER_ADMIN viewing a shop
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const effectiveShopId = undefined;
   
   // State
   const [grns, setGRNs] = useState<GoodsReceivedNote[]>([]);

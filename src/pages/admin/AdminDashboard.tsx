@@ -100,7 +100,7 @@ type RoleFilter = 'all' | 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'STAFF';
 
 export const AdminDashboard: React.FC = () => {
   const { theme } = useTheme();
-  const { user, getAccessToken, setViewingShop } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -193,20 +193,8 @@ export const AdminDashboard: React.FC = () => {
     fetchData();
   }, []);
 
-  // View shop dashboard - set viewing shop and navigate
-  const viewShopDashboard = (shop: Shop) => {
-    setViewingShop({
-      id: shop.id,
-      name: shop.name,
-      slug: shop.slug,
-      email: shop.email,
-      phone: shop.phone,
-      address: shop.address,
-      logo: shop.logo,
-      currency: shop.currency,
-      taxRate: shop.taxRate,
-      businessRegNo: shop.businessRegNo,
-    });
+  // View shop dashboard - navigate to shop
+  const viewShopDashboard = (_shop: Shop) => {
     navigate('/');
   };
 

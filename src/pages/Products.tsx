@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useDataCache } from '../contexts/DataCacheContext';
-import { useAuth } from '../contexts/AuthContext';
 import { mockProducts, productCategories, productBrands } from '../data/mockData';
 import type { Product } from '../data/mockData';
 import { productService, type APIProduct, type SalesHistoryItem, type SalesStats, type StockMovement, type PriceHistoryRecord } from '../services/productService';
@@ -43,12 +42,11 @@ const convertAPIProductToFrontend = (apiProduct: APIProduct): Product => ({
 export const Products: React.FC = () => {
   const { theme } = useTheme();
   const { products: cachedProducts, setProducts: setCachedProducts } = useDataCache();
-  const { isViewingShop, viewingShop } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
   // Get effective shopId for SUPER_ADMIN viewing a shop
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const effectiveShopId = undefined;
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');

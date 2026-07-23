@@ -16,17 +16,9 @@ import {
 } from '@mui/material';
 import { Search, FilterList } from '@mui/icons-material';
 import ProductCard from '../components/ProductCard';
-import { formatPrice, calcDiscount } from '../data/products';
-
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
 interface PublicCategory {
-  id: string;
-  name: string;
-  _count: { products: number };
-}
-
-interface PublicBrand {
   id: string;
   name: string;
   _count: { products: number };

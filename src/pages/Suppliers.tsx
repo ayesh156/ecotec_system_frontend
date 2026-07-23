@@ -28,13 +28,13 @@ import type { FrontendSupplier } from '../services/supplierService';
 
 export const Suppliers: React.FC = () => {
   const { theme } = useTheme();
-  const { isViewingShop, viewingShop, user } = useAuth();
+  const { user } = useAuth();
   const { settings: whatsAppSettings, shopDetails } = useWhatsAppSettings();
   const { branding } = useShopBranding();
   
   // Get effective shopId for SUPER_ADMIN viewing a shop
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
-  const effectiveShop = isViewingShop && viewingShop ? viewingShop : user?.shop;
+  const effectiveShopId = undefined;
+  const effectiveShop = user?.shop;
   
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');

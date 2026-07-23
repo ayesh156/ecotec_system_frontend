@@ -326,7 +326,7 @@ const SectionVisibilityTab: React.FC<SectionVisibilityTabProps> = ({
 
 export const ShopAdminPanel: React.FC = () => {
   const { theme } = useTheme();
-  const { user, getAccessToken, isViewingShop, viewingShop } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const { hiddenSections, updateHiddenSections, isLoading: sectionsLoading } = useShopSections();
   const navigate = useNavigate();
   const location = useLocation();
@@ -339,10 +339,10 @@ export const ShopAdminPanel: React.FC = () => {
     : 'users';
 
   // Determine if user has access: ADMIN or SUPER_ADMIN viewing a shop
-  const hasAccess = user?.role === 'ADMIN' || (user?.role === 'SUPER_ADMIN' && isViewingShop);
+  const hasAccess = user?.role === 'ADMIN';
   
   // Sections tab accessible by ADMIN (shop admin) and SUPER_ADMIN viewing a shop
-  const canAccessSections = user?.role === 'ADMIN' || (user?.role === 'SUPER_ADMIN' && isViewingShop);
+  const canAccessSections = user?.role === 'ADMIN';
 
   // State
   const [stats, setStats] = useState<ShopStats | null>(null);
@@ -390,7 +390,7 @@ export const ShopAdminPanel: React.FC = () => {
     const token = getAccessToken();
 
     // For SUPER_ADMIN viewing a shop, pass shopId as query param
-    const shopIdParam = isViewingShop && viewingShop ? `?shopId=${viewingShop.id}` : '';
+    const shopIdParam = '';
 
     try {
       const [statsRes, usersRes] = await Promise.all([
@@ -425,7 +425,7 @@ export const ShopAdminPanel: React.FC = () => {
     if (hasAccess) {
       fetchData();
     }
-  }, [user, hasAccess, isViewingShop, viewingShop]);
+  }, [user, hasAccess]);
 
   // Filtered users
   const filteredUsers = useMemo(() => {
@@ -515,9 +515,7 @@ export const ShopAdminPanel: React.FC = () => {
       try {
         const token = getAccessToken();
         // For SUPER_ADMIN viewing a shop, include shopId in body
-        const bodyData = isViewingShop && viewingShop 
-          ? { ...formData, shopId: viewingShop.id }
-          : formData;
+        const bodyData = formData;
         
         const response = await fetch(`${API_URL}/shop-admin/users`, {
           method: 'POST',
@@ -706,7 +704,7 @@ export const ShopAdminPanel: React.FC = () => {
       try {
         const token = getAccessToken();
         // For SUPER_ADMIN viewing a shop, include shopId as query param
-        const shopIdParam = isViewingShop && viewingShop ? `?shopId=${viewingShop.id}` : '';
+        const shopIdParam = '';
         const response = await fetch(`${API_URL}/shop-admin/users/${editUser.id}${shopIdParam}`, {
           method: 'PUT',
           headers: {
@@ -888,7 +886,7 @@ export const ShopAdminPanel: React.FC = () => {
       try {
         const token = getAccessToken();
         // For SUPER_ADMIN viewing a shop, include shopId as query param
-        const shopIdParam = isViewingShop && viewingShop ? `?shopId=${viewingShop.id}` : '';
+        const shopIdParam = '';
         const response = await fetch(`${API_URL}/shop-admin/users/${resetUser.id}/reset-password${shopIdParam}`, {
           method: 'PUT',
           headers: {
@@ -1030,7 +1028,7 @@ export const ShopAdminPanel: React.FC = () => {
       try {
         const token = getAccessToken();
         // For SUPER_ADMIN viewing a shop, include shopId as query param
-        const shopIdParam = isViewingShop && viewingShop ? `?shopId=${viewingShop.id}` : '';
+        const shopIdParam = '';
         const response = await fetch(`${API_URL}/shop-admin/users/${deleteUser.id}${shopIdParam}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },

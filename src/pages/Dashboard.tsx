@@ -12,7 +12,7 @@ import {
 
 export const Dashboard: React.FC = () => {
   const { theme } = useTheme();
-  const { user, isViewingShop, viewingShop } = useAuth();
+  const { user } = useAuth();
   const { 
     invoices, products, customers,
     loadInvoices, loadProducts, loadCustomers,
@@ -24,10 +24,10 @@ export const Dashboard: React.FC = () => {
 
   // Redirect SUPER_ADMIN to admin dashboard (only if not viewing a shop)
   useEffect(() => {
-    if (user?.role === 'SUPER_ADMIN' && !isViewingShop) {
+    if (user?.role === 'SUPER_ADMIN') {
       navigate('/admin', { replace: true });
     }
-  }, [user, isViewingShop, navigate]);
+  }, [user, navigate]);
 
   // Load data when component mounts or when viewing shop changes
   useEffect(() => {
@@ -44,10 +44,10 @@ export const Dashboard: React.FC = () => {
     };
     
     // Only load if we're viewing a shop (or if regular user)
-    if (!user?.role || user.role !== 'SUPER_ADMIN' || isViewingShop) {
+    if (!user?.role || user.role !== 'SUPER_ADMIN') {
       loadData();
     }
-  }, [loadInvoices, loadProducts, loadCustomers, isViewingShop, user?.role]);
+  }, [loadInvoices, loadProducts, loadCustomers, user?.role]);
 
   // Handle refresh
   const handleRefresh = async () => {
@@ -65,13 +65,10 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // If SUPER_ADMIN and not viewing a shop, show nothing while redirecting
-  if (user?.role === 'SUPER_ADMIN' && !isViewingShop) {
+  // If SUPER_ADMIN, show nothing while redirecting
+  if (user?.role === 'SUPER_ADMIN') {
     return null;
   }
-
-  // Determine which shop name to display
-  const shopName = isViewingShop && viewingShop ? viewingShop.name : user?.shop?.name || 'Your Shop';
 
   // Loading state
   const isLoading = invoicesLoading || productsLoading || customersLoading;
@@ -139,13 +136,10 @@ export const Dashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0">
           <h1 className={`text-xl sm:text-2xl lg:text-3xl font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-            {isViewingShop ? `${shopName} Dashboard` : 'Dashboard'}
+            Dashboard
           </h1>
           <p className={`mt-0.5 text-sm sm:text-base truncate ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-            {isViewingShop 
-              ? `Viewing ${shopName}'s data as Super Admin`
-              : "Welcome back! Here's what's happening with your store today."
-            }
+            Welcome back! Here's what's happening with your store today.
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">

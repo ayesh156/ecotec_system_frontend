@@ -62,7 +62,7 @@ const ShopBrandingContext = createContext<ShopBrandingContextType | undefined>(u
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
-async function fetchShopBranding(shopId: string, token: string): Promise<ShopBranding> {
+async function fetchShopBranding(_shopId: string, token: string): Promise<ShopBranding> {
   const response = await fetch(`${API_BASE_URL}/shops/current`, {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -93,7 +93,7 @@ async function fetchShopBranding(shopId: string, token: string): Promise<ShopBra
 }
 
 async function updateShopBranding(
-  shopId: string,
+  _shopId: string,
   branding: Partial<ShopBranding>,
   token: string
 ): Promise<ShopBranding> {

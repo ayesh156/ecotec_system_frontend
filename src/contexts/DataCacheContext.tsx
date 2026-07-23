@@ -52,7 +52,7 @@ const CACHE_EXPIRY = 5 * 60 * 1000;
 
 export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Get viewing shop context for SUPER_ADMIN
-  const { viewingShop, isViewingShop, user } = useAuth();
+  const { user } = useAuth();
   
   // Track the current shop ID for cache invalidation
   const currentShopIdRef = useRef<string | null>(null);
@@ -90,8 +90,8 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Get the effective shop ID (viewing shop for SUPER_ADMIN, own shop otherwise)
   // Memoize to prevent unnecessary re-renders
   const effectiveShopId = useMemo(() => {
-    return isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id || null;
-  }, [isViewingShop, viewingShop, user?.shop?.id]);
+    return user?.shop?.id || null;
+  }, [user?.shop?.id]);
   
   // Clear cache when switching shops (SUPER_ADMIN viewing different shops)
   useEffect(() => {

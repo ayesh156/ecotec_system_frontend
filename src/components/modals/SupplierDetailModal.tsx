@@ -65,8 +65,8 @@ export const SupplierDetailModal: React.FC<SupplierDetailModalProps> = ({
   refreshTrigger,
 }) => {
   const { theme } = useTheme();
-  const { user, isViewingShop, viewingShop, getAccessToken } = useAuth();
-  const shopId = isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id;
+  const { user, getAccessToken } = useAuth();
+  const shopId = user?.shop?.id;
   
   const [activeTab, setActiveTab] = useState<'overview' | 'grn' | 'payments'>('overview');
   const [grns, setGRNs] = useState<FrontendGRN[]>([]);

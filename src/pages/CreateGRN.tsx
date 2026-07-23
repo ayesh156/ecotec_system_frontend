@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
 import { useShopBranding } from '../contexts/ShopBrandingContext';
 import type { Supplier, Product, GoodsReceivedNote, GRNItem, GRNStatus } from '../data/mockData';
 import { productService, convertAPIProductToFrontend } from '../services/productService';
@@ -24,13 +23,12 @@ type Step = 1 | 2 | 3;
 
 export const CreateGRN: React.FC = () => {
   const { theme } = useTheme();
-  const { isViewingShop, viewingShop } = useAuth();
   const { branding } = useShopBranding();
   const navigate = useNavigate();
   const printRef = useRef<HTMLDivElement>(null);
   
   // Get effective shopId for SUPER_ADMIN viewing a shop
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : undefined;
+  const effectiveShopId = undefined;
   
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
