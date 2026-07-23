@@ -1,6 +1,5 @@
 import { forwardRef } from 'react';
 import { Building2 } from 'lucide-react';
-import logo from '../assets/logo.png';
 
 interface QuotationItem {
   id: string;
@@ -51,8 +50,8 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
     // Use branding values with fallbacks
     const shopName = branding?.name || 'Eco System';
     const shopSubName = branding?.subName || '';
-    const hasCustomLogo = branding?.logo && branding.logo !== logo;
-    const shopLogo = branding?.logo || logo;
+    const hasCustomLogo = !!branding?.logo;
+    const shopLogo = branding?.logo || '/logo.png';
     const shopPhone = branding?.phone || '011-2345678 | 077-1234567';
     const shopEmail = branding?.email || 'info@ecosystem.lk';
 

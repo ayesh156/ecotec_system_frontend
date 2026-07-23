@@ -70,14 +70,14 @@ const getAuthHeaders = (): HeadersInit => {
 };
 
 export const WhatsAppSettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user, isViewingShop, viewingShop } = useAuth();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shopDetails, setShopDetails] = useState<ShopDetails | null>(null);
   
-  // Get effective shop ID (viewed shop for SUPER_ADMIN, or user's own shop)
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id || null;
+  // Get effective shop ID from the user's shop
+  const effectiveShopId = user?.shop?.id || null;
 
   const [settings, setSettings] = useState<WhatsAppSettings>(mockWhatsAppSettings);
 
@@ -95,7 +95,7 @@ export const WhatsAppSettingsProvider: React.FC<{ children: ReactNode }> = ({ ch
     setError(null);
 
     try {
-      const url = `${API_BASE_URL}/shop-admin/whatsapp-settings?shopId=${effectiveShopId}`;
+      const url = `${API_BASE_URL}/shops/current/whatsapp`;
       console.log(`🔄 Loading WhatsApp settings for shop ${effectiveShopId}`);
       
       const response = await fetch(url, {
@@ -201,7 +201,7 @@ export const WhatsAppSettingsProvider: React.FC<{ children: ReactNode }> = ({ ch
     setError(null);
 
     try {
-      const url = `${API_BASE_URL}/shop-admin/whatsapp-settings?shopId=${effectiveShopId}`;
+      const url = `${API_BASE_URL}/shops/current/whatsapp`;
       console.log(`💾 Saving WhatsApp settings for shop ${effectiveShopId}`);
       
       const response = await fetch(url, {

@@ -1,7 +1,6 @@
 import { forwardRef } from 'react';
 import type { Invoice, Customer } from '../data/mockData';
 import { Building2 } from 'lucide-react';
-import defaultLogo from '../assets/logo.png';
 
 interface InvoiceItemWithWarranty {
   productId: string;
@@ -39,8 +38,8 @@ export const PrintableInvoice = forwardRef<HTMLDivElement, PrintableInvoiceProps
     // Use branding values with fallbacks
     const shopName = branding?.name || 'ECO SYSTEM COMPUTER';
     const shopSubName = branding?.subName || 'SOLUTIONS';
-    const hasCustomLogo = branding?.logo && branding.logo !== defaultLogo;
-    const shopLogo = branding?.logo || defaultLogo;
+    const hasCustomLogo = !!branding?.logo;
+    const shopLogo = branding?.logo || '/logo.png';
     const shopAddress = branding?.address || 'No.14, Mulatiyana junction, Mulatiyana, Matara.';
     const shopPhone = branding?.phone || '0711453111';
     const shopEmail = branding?.email || 'ecosystemcomputersolutions@gmail.com';

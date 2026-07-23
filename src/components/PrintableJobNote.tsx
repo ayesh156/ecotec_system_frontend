@@ -1,7 +1,6 @@
 import { forwardRef } from 'react';
 import { Building2 } from 'lucide-react';
 import type { JobNote } from '../data/mockData';
-import defaultLogo from '../assets/logo.png';
 
 // Branding settings for PDF header
 export interface JobNoteBranding {
@@ -23,8 +22,8 @@ export const PrintableJobNote = forwardRef<HTMLDivElement, PrintableJobNoteProps
   ({ jobNote, branding }, ref) => {
     // Use branding values with fallbacks
     const shopName = branding?.name || 'Eco System';
-    const hasCustomLogo = branding?.logo && branding.logo !== defaultLogo;
-    const shopLogo = branding?.logo || defaultLogo;
+    const hasCustomLogo = !!branding?.logo;
+    const shopLogo = branding?.logo || '/logo.png';
     const shopPhone = branding?.phone || '011-2345678';
     const shopEmail = branding?.email || 'info@ecosystem.lk';
 

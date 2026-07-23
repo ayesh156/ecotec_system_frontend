@@ -200,15 +200,15 @@ const ShopSectionsContext = createContext<ShopSectionsContextType | undefined>(u
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
 export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user, viewingShop, isViewingShop, getAccessToken } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const [hiddenSections, setHiddenSections] = useState<string[]>([]);
   const [adminHiddenSections, setAdminHiddenSections] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true); // Start with loading true to prevent flash
   const [hasInitialized, setHasInitialized] = useState(false);
   const [lastFetchedShopId, setLastFetchedShopId] = useState<string | null>(null);
 
-  // Get effective shop ID (viewing shop for Super Admin, own shop otherwise)
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id;
+  // Get effective shop ID from the user's shop
+  const effectiveShopId = user?.shop?.id;
 
   // Fetch hidden sections from API
   const fetchHiddenSections = useCallback(async (forceRefresh = false) => {
@@ -233,7 +233,7 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     setIsLoading(true);
     try {
       // Use standard shop fetch endpoint which includes full shop details
-      const url = `${API_BASE_URL}/shops/${effectiveShopId}`;
+      const url = `${API_BASE_URL}/shops/current/sections`;
       console.log('📡 [ShopSections] API_BASE_URL:', API_BASE_URL);
       console.log('📡 [ShopSections] Fetching sections from:', url);
       
@@ -359,7 +359,7 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     setIsLoading(true);
     try {
       // Use dedicated sections endpoint with proper authorization
-      const url = `${API_BASE_URL}/shops/${effectiveShopId}/sections`;
+      const url = `${API_BASE_URL}/shops/current/sections`;
       console.log('📡 Updating SuperAdmin sections via:', url);
       
       const response = await fetch(url, {
@@ -403,7 +403,7 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     setIsLoading(true);
     try {
       // Use dedicated sections endpoint with proper authorization
-      const url = `${API_BASE_URL}/shops/${effectiveShopId}/sections`;
+      const url = `${API_BASE_URL}/shops/current/sections`;
       console.log('📡 Updating Admin sections via:', url);
 
       const response = await fetch(url, {

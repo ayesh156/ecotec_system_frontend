@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import logo from '../assets/logo.png';
 import * as XLSX from 'xlsx';
 import { 
   mockCashAccounts, 
@@ -1400,7 +1399,7 @@ export const CashManagement: React.FC = () => {
     <div class="header">
       <div class="company-section">
         <div class="company-logo">
-          <img src="${logo}" alt="Eco System Logo" />
+          <img src="/logo.png" alt="Eco System Logo" />
         </div>
         <div class="company-info">
           <h1>ECO SYSTEM COMPUTER</h1>

@@ -3,7 +3,7 @@ import './index.css';
 import { Suspense, lazy, useEffect } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AuthProvider, ProtectedRoute, useAuth } from './contexts/AuthContext';
 import { WhatsAppSettingsProvider } from './contexts/WhatsAppSettingsContext';
@@ -287,6 +287,12 @@ function App() {
                       </ProtectedRoute>
                     } />
 
+                    {/* Direct /dashboard access redirect to /system/dashboard */}
+                    {/* This catches users typing /dashboard in the URL bar before auth check completes */}
+                    <Route path="/dashboard" element={
+                      <Navigate to="/system/dashboard" replace />
+                    } />
+
                     {/* Legacy redirect: support old /system path without trailing /system prefix */}
                     <Route path="/*" element={
                       <ProtectedRoute>
@@ -295,6 +301,7 @@ function App() {
                             <Routes>
                               <Route path="/" element={<Dashboard />} />
                               <Route path="/dashboard" element={<Dashboard />} />
+                              {/* Fallback for any unmatched /system routes */}
                               <Route path="*" element={<NotFound />} />
                             </Routes>
                           </Suspense>

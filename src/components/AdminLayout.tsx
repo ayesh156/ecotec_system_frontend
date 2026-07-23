@@ -39,7 +39,7 @@ interface AdminLayoutProps {
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { theme, toggleTheme, aiAutoFillEnabled, toggleAiAutoFill, setAccentColor } = useTheme();
-  const { user, logout, isViewingShop, viewingShop, exitViewingShop } = useAuth();
+  const { user, logout } = useAuth();
   const { branding } = useShopBranding();
   const { isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, isLoading: sectionsLoading } = useShopSections();
   const { invoices: cachedInvoices, customers: cachedCustomers, loadInvoices, loadCustomers, invoicesLoaded, customersLoaded } = useDataCache();
@@ -81,17 +81,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const mobileSidebarNavRef = useRef<HTMLElement>(null);
   const sidebarScrollPositionRef = useRef<number>(0);
   const mobileSidebarScrollPositionRef = useRef<number>(0);
-
-  // Handle exit viewing shop
-  const handleExitViewingShop = () => {
-    // Restore SUPER_ADMIN's own accent colour before exiting
-    const savedAdminAccent = localStorage.getItem('superAdminAccentColor');
-    if (savedAdminAccent) {
-      setAccentColor(savedAdminAccent as any);
-    }
-    exitViewingShop();
-    navigate('/admin');
-  };
 
   // Handle logout
   const handleLogout = async () => {
@@ -203,8 +192,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   };
 
   // Load data for sidebar counts if not already loaded
-  // SUPER_ADMIN viewing shop should also load data, only skip for SUPER_ADMIN not viewing any shop
-  const shouldLoadShopData = user?.role !== 'SUPER_ADMIN' || isViewingShop;
+  const shouldLoadShopData = user?.role !== 'SUPER_ADMIN';
   
   useEffect(() => {
     if (!invoicesLoaded && shouldLoadShopData) {
@@ -350,16 +338,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     },
   ];
 
-  // Select navigation based on user role and viewing state
-  // SUPER_ADMIN viewing a shop should see shop navigation
-  const rawNavItems: NavItem[] = (user?.role === 'SUPER_ADMIN' && !isViewingShop) 
+  // Select navigation based on user role
+  const rawNavItems: NavItem[] = (user?.role === 'SUPER_ADMIN') 
     ? superAdminNavItems 
     : shopNavItems;
 
-  // Check if user can manage sections (SuperAdmin viewing shop OR Shop ADMIN)
-  const isSuperAdminViewingShop = user?.role === 'SUPER_ADMIN' && isViewingShop;
+  // Check if user can manage sections
   const isShopAdmin = user?.role === 'ADMIN';
-  const canManageSections = isSuperAdminViewingShop || isShopAdmin;
+  const canManageSections = isShopAdmin;
 
   // Filter out hidden sections from navigation
   // For SuperAdmin viewing a shop OR Shop ADMIN: show all sections but mark hidden ones with badge
@@ -368,7 +354,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const navItems = useMemo(() => {
     console.log('🔄 Recalculating navItems.');
     console.log('User role:', user?.role);
-    console.log('Is viewing shop:', isViewingShop);
     console.log('Can manage sections:', canManageSections);
     console.log('Hidden sections (SuperAdmin):', hiddenSections);
     console.log('Admin hidden sections:', adminHiddenSections);
@@ -376,8 +361,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     const isShopAdmin = user?.role === 'ADMIN';
     
-    if (isSuperAdmin && isViewingShop) {
-      // SuperAdmin viewing shop: show ALL sections, mark SuperAdmin-hidden as disabled
+    if (false) {
+      // SuperAdmin viewing shop: disabled
       return rawNavItems.map(item => {
         const itemDisabled = isSuperAdminHidden(item.path);
         console.log(`SuperAdmin - Item ${item.path} - Hidden: ${itemDisabled}`);
@@ -425,11 +410,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         // Remove parent items that have no visible sub-items
         .filter(item => !item.subItems || item.subItems.length > 0);
     }
-  }, [rawNavItems, isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, canManageSections, user?.role, isViewingShop]);
+  }, [rawNavItems, isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, canManageSections, user?.role]);
 
   // Bottom nav items - different for SUPER_ADMIN (when not viewing shop)
   // Shop Admin features (Users, Branding, Sections) are now inside Settings page for both SHOP_ADMIN and SUPER_ADMIN viewing a shop
-  const rawBottomNavItems: NavItem[] = (user?.role === 'SUPER_ADMIN' && !isViewingShop)
+  const rawBottomNavItems: NavItem[] = (user?.role === 'SUPER_ADMIN')
     ? [
         { path: '/settings', icon: Settings, label: 'Settings', badge: null },
         { path: '/help', icon: HelpCircle, label: 'Help Center', badge: null },
@@ -446,8 +431,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     const isShopAdmin = user?.role === 'ADMIN';
     
-    if (isSuperAdmin && isViewingShop) {
-      // SuperAdmin viewing shop: show ALL, mark SuperAdmin-hidden as disabled
+    if (false) {
+      // SuperAdmin viewing shop: disabled
       return rawBottomNavItems.map(item => {
         const itemDisabled = isSuperAdminHidden(item.path);
         return {
@@ -492,7 +477,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         })
         .filter(item => !item.subItems || item.subItems.length > 0);
     }
-  }, [rawBottomNavItems, isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, canManageSections, user?.role, isViewingShop]);
+  }, [rawBottomNavItems, isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, canManageSections, user?.role]);
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isExactActive = (path: string) => location.pathname === path;
@@ -515,7 +500,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       {/* Logo Section - Shop Branding */}
       <div className={`flex items-center h-16 px-4 border-b ${theme === 'dark' ? 'border-slate-800/50' : 'border-slate-200'}`}>
         <Link to="/" className="flex items-center gap-3 group">
-          {user?.role === 'SUPER_ADMIN' && !isViewingShop ? (
+          {user?.role === 'SUPER_ADMIN' ? (
             // SUPER_ADMIN not viewing a shop: Show Ecosystem branding
             <>
               <div className="relative flex-shrink-0">
@@ -1081,7 +1066,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             // SUPER_ADMIN: Show Ecosystem branding
             <>
               <div className="flex-shrink-0">
-                <img src={ecosystemLogo} alt="Eco System" className="w-10 h-10 object-contain" />
+                <img src='logo.png' alt="Eco System" className="w-10 h-10 object-contain" />
               </div>
               <div className="flex flex-col">
                 <span className={`text-base font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
@@ -1448,7 +1433,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               <div className="hidden md:flex flex-1 items-center justify-center">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
-                    <img src={ecosystemLogo} alt="Eco System" className="w-full h-full object-contain" />
+                    <img src="logo.png" alt="Eco System" className="w-full h-full object-contain" />
                   </div>
                   <div className="flex flex-col">
                     <span className={`text-base font-bold tracking-wide leading-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
@@ -1589,31 +1574,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           </div>
         </header>
 
-        {/* Viewing Shop Banner for SUPER_ADMIN */}
-        {isViewingShop && viewingShop && (
-          <div className="sticky top-16 z-20 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-2 sm:px-4 py-2 sm:py-2.5 shadow-lg">
-            <div className="flex items-center justify-between max-w-screen-2xl mx-auto gap-2">
-              <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
-                <Shield className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-2 min-w-0">
-                  <span className="text-xs sm:text-sm font-medium truncate">
-                    <span className="hidden sm:inline">Viewing as Super Admin: </span>
-                    <span className="sm:hidden">Viewing as Super Admin: </span>
-                    <span className="font-bold">{viewingShop.name}</span>
-                  </span>
-                  <span className="text-purple-200 text-[10px] sm:text-sm truncate">(@{viewingShop.slug})</span>
-                </div>
-              </div>
-              <button
-                onClick={handleExitViewingShop}
-                className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1 sm:py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0"
-              >
-                <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Exit View
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Removed: Viewing Shop Banner (multi-tenant feature deprecated) */}
 
         {/* Page Content */}
         <main className="p-4 lg:p-6">

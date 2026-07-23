@@ -63,7 +63,7 @@ const ShopBrandingContext = createContext<ShopBrandingContextType | undefined>(u
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
 async function fetchShopBranding(shopId: string, token: string): Promise<ShopBranding> {
-  const response = await fetch(`${API_BASE_URL}/shops/${shopId}`, {
+  const response = await fetch(`${API_BASE_URL}/shops/current`, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ async function updateShopBranding(
   branding: Partial<ShopBranding>,
   token: string
 ): Promise<ShopBranding> {
-  const response = await fetch(`${API_BASE_URL}/shops/${shopId}`, {
+  const response = await fetch(`${API_BASE_URL}/shops/current`, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -145,7 +145,7 @@ async function updateShopBranding(
 // ===================================
 
 export const ShopBrandingProvider: React.FC<ShopBrandingProviderProps> = ({ children }) => {
-  const { user, getAccessToken, isViewingShop, viewingShop } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const [branding, setBranding] = useState<ShopBranding>(DEFAULT_BRANDING);
   const [originalBranding, setOriginalBranding] = useState<ShopBranding>(DEFAULT_BRANDING);
   const [isLoading, setIsLoading] = useState(false);
@@ -154,8 +154,8 @@ export const ShopBrandingProvider: React.FC<ShopBrandingProviderProps> = ({ chil
   // Check for unsaved changes
   const hasUnsavedChanges = JSON.stringify(branding) !== JSON.stringify(originalBranding);
   
-  // Get effective shop ID - for SUPER_ADMIN viewing a shop, use viewingShop.id
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id;
+  // Get effective shop ID from the user's shop
+  const effectiveShopId = user?.shop?.id;
 
   // Fetch branding on mount when user has a shop or SUPER_ADMIN is viewing a shop
   useEffect(() => {

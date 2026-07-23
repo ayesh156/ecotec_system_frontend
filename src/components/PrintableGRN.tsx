@@ -1,7 +1,6 @@
 import { forwardRef } from 'react';
 import { Building2 } from 'lucide-react';
 import type { GoodsReceivedNote, Supplier } from '../data/mockData';
-import logo from '../assets/logo.png';
 
 interface GRNBranding {
   name?: string;
@@ -23,8 +22,8 @@ export const PrintableGRN = forwardRef<HTMLDivElement, PrintableGRNProps>(
     // Use branding values with fallbacks
     const shopName = branding?.name || 'ECO SYSTEM COMPUTER';
     const shopSubName = branding?.subName || 'SOLUTIONS';
-    const hasCustomLogo = branding?.logo && branding.logo !== logo;
-    const shopLogo = branding?.logo || logo;
+    const hasCustomLogo = !!branding?.logo;
+    const shopLogo = branding?.logo || '/logo.png';
     const shopAddress = branding?.address || 'No.14, Mulatiyana junction, Mulatiyana, Matara.';
     const shopPhone = branding?.phone || '0711453111';
     const shopEmail = branding?.email || 'ecosystemcomputersolutions@gmail.com';

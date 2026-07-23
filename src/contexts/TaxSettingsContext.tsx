@@ -26,11 +26,11 @@ const getStorageKey = (shopId: string | null) => {
 };
 
 export const TaxSettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user, isViewingShop, viewingShop } = useAuth();
+  const { user } = useAuth();
   const [settings, setSettings] = useState<TaxSettings>(DEFAULT_TAX_SETTINGS);
   
-  // Get effective shop ID (viewed shop for SUPER_ADMIN, or user's own shop)
-  const effectiveShopId = isViewingShop && viewingShop ? viewingShop.id : user?.shop?.id || null;
+  // Get effective shop ID from the user's shop
+  const effectiveShopId = user?.shop?.id || null;
 
   // Load settings from localStorage when shop changes
   useEffect(() => {
