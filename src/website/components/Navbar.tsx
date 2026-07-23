@@ -33,7 +33,6 @@ import {
   Person,
 } from '@mui/icons-material';
 import { useCart } from '../context/CartContext';
-import logoImg from '../../assets/logo.png';
 
 const navLinks = [
   { label: 'Home', path: '/', icon: <Home /> },
@@ -97,7 +96,7 @@ export default function Navbar() {
             >
               <Box
                 component="img"
-                src={logoImg}
+                src="/logo.png"
                 alt="Ecotec Logo"
                 sx={{
                   width: 42,

@@ -17,7 +17,6 @@ import {
   AccessTime,
 } from '@mui/icons-material';
 import { storeInfo } from '../data/products';
-import logoImg from '../../assets/logo.png';
 
 export default function Footer() {
   return (
@@ -38,7 +37,7 @@ export default function Footer() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
               <Box
                 component="img"
-                src={logoImg}
+                src="/logo.png"
                 alt="Ecotec Logo"
                 sx={{
                   width: 48,

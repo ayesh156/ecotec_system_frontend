@@ -14,7 +14,6 @@ import {
   Calculator, FileCheck, Wallet, Brain, Zap, StickyNote, CalendarDays, Lightbulb, LogOut
 } from 'lucide-react';
 import { useIsMobile } from '../hooks/use-mobile';
-import ecosystemLogo from '../assets/logo.png';
 import { AIAssistant } from './AIAssistant';
 
 interface SubNavItem {
@@ -520,7 +519,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             // SUPER_ADMIN not viewing a shop: Show Ecosystem branding
             <>
               <div className="relative flex-shrink-0">
-                <img src={ecosystemLogo} alt="Eco System" className="w-10 h-10 object-contain" />
+                <img src="/logo.png" alt="Eco System" className="w-10 h-10 object-contain" />
               </div>
               {!sidebarCollapsed && (
                 <div className="flex flex-col overflow-hidden">
