@@ -67,10 +67,10 @@ export const Login: React.FC = () => {
   }
 
   const features = [
-    { icon: Zap, title: 'Lightning Fast', desc: 'Process invoices and manage inventory in seconds' },
-    { icon: Shield, title: 'Secure & Reliable', desc: 'Enterprise-grade security for your business data' },
-    { icon: BarChart3, title: 'Smart Analytics', desc: 'Real-time insights to grow your business' },
-    { icon: Smartphone, title: 'Mobile Ready', desc: 'Manage your shop from anywhere, any device' },
+    { icon: Zap, title: 'Fast POS Billing', desc: 'Process customer sales, print receipts, and issue invoices instantly.' },
+    { icon: Shield, title: 'Real-time Inventory', desc: 'Live stock tracking, serial numbers, and GRN procurement.' },
+    { icon: BarChart3, title: 'Financial Reports', desc: 'Track daily cash flow, expenses, profit margins, and sales analytics.' },
+    { icon: Smartphone, title: 'Service & Repairs', desc: 'Manage job notes, warranties, and technician status.' },
   ];
 
   return (
@@ -123,10 +123,10 @@ export const Login: React.FC = () => {
         <div className="relative z-10 flex flex-col justify-between w-full p-12 xl:p-16">
           {/* Top: Logo */}
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Eco System" className="w-12 h-12 rounded-xl shadow-lg" />
+            <img src="/logo.png" alt="ECOTEC Computer Solutions" className="w-12 h-12 rounded-xl shadow-lg" />
             <div>
-              <h2 className="text-2xl font-bold text-white">Eco System</h2>
-              <p className="text-emerald-100 text-sm">Shop Management System</p>
+              <h2 className="text-2xl font-bold text-white">ECOTEC Computer Solutions</h2>
+              <p className="text-emerald-100 text-sm">Internal Management Portal</p>
             </div>
           </div>
 
@@ -134,13 +134,13 @@ export const Login: React.FC = () => {
           <div className="space-y-10">
             <div>
               <h1 className="text-4xl xl:text-5xl font-extrabold text-white leading-tight">
-                Manage Your <br />
+                Welcome to <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-200">
-                  Business Smarter
+                  Ecotec Portal
                 </span>
               </h1>
               <p className="mt-4 text-lg text-emerald-100 max-w-md leading-relaxed">
-                The all-in-one platform for computer & mobile shops. Invoicing, inventory, customers, and analytics — all in one place.
+                Authorized staff portal for sales, billing, inventory tracking, and shop management.
               </p>
             </div>
 
@@ -157,21 +157,8 @@ export const Login: React.FC = () => {
             </div>
           </div>
 
-          {/* Bottom: Trust indicator */}
-          <div className="flex items-center gap-4">
-            <div className="flex -space-x-3">
-              {['A', 'K', 'S', 'D'].map((letter, i) => (
-                <div key={letter} className="w-10 h-10 rounded-full bg-gradient-to-br from-white/30 to-white/10 border-2 border-white/30 flex items-center justify-center text-white text-xs font-bold shadow-lg"
-                  style={{ zIndex: 4 - i }}>
-                  {letter}
-                </div>
-              ))}
-            </div>
-            <div>
-              <p className="text-white font-medium text-sm">Trusted by 500+ shops</p>
-              <p className="text-emerald-100/70 text-xs">across Sri Lanka</p>
-            </div>
-          </div>
+          {/* Bottom: Removed multi-tenant trust badge */}
+          <div />
         </div>
       </div>
 
@@ -187,10 +174,10 @@ export const Login: React.FC = () => {
         <div className="relative w-full max-w-md">
           {/* Mobile logo */}
           <div className="flex items-center justify-center gap-3 mb-8 lg:hidden">
-            <img src='logo.png' alt="Eco System" className="w-12 h-12 rounded-xl shadow-lg" />
+            <img src='logo.png' alt="ECOTEC Computer Solutions" className="w-12 h-12 rounded-xl shadow-lg" />
             <div>
-              <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Eco System</h2>
-              <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Shop Management System</p>
+              <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>ECOTEC Computer Solutions</h2>
+              <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Internal Management Portal</p>
             </div>
           </div>
 
@@ -328,34 +315,12 @@ export const Login: React.FC = () => {
               </button>
             </form>
 
-            {/* Divider */}
-            <div className="relative my-7">
-              <div className="absolute inset-0 flex items-center">
-                <div className={`w-full border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`} />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className={`px-3 rounded ${theme === 'dark' ? 'bg-slate-900 text-slate-500' : 'bg-white text-slate-400'}`}>
-                  New to Eco System?
-                </span>
-              </div>
-            </div>
-
-            {/* Register link */}
-            <Link
-              to="/register"
-              className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 border ${
-                theme === 'dark'
-                  ? 'border-slate-700 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30'
-                  : 'border-slate-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300'
-              }`}
-            >
-              Create a free account
-            </Link>
+            {/* Registration links removed — single shop / internal enterprise mode */}
           </div>
 
           {/* Footer */}
           <p className={`mt-6 text-center text-xs ${theme === 'dark' ? 'text-slate-600' : 'text-slate-400'}`}>
-            © {new Date().getFullYear()} Eco System. All rights reserved.
+            © 2026 ECOTEC Computer Solutions. Powered by NebulaInfinite.
           </p>
         </div>
       </div>
