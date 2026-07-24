@@ -690,7 +690,7 @@ export const Invoices: React.FC = () => {
 
   // Handlers
   const handleViewClick = (invoice: Invoice) => {
-    navigate(`/invoices/${invoice.id}`);
+    navigate(`/system/invoices/${invoice.id}`);
   };
 
   const handleEditClick = (invoice: Invoice) => {
@@ -1168,7 +1168,7 @@ export const Invoices: React.FC = () => {
             <RefreshCw className="w-5 h-5" />
           </button>
           <button 
-            onClick={() => navigate('/invoices/create')}
+            onClick={() => navigate('/system/invoices/create')}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
           >
             <Plus className="w-5 h-5" />
@@ -2274,7 +2274,7 @@ export const Invoices: React.FC = () => {
             </button>
           ) : (
             <button 
-              onClick={() => navigate('/invoices/create')}
+              onClick={() => navigate('/system/invoices/create')}
               className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
             >
               Create Invoice

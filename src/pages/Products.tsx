@@ -530,11 +530,11 @@ export const Products: React.FC = () => {
 
   // Handlers
   const handleAddProduct = () => {
-    navigate('/products/add');
+    navigate('/system/products/add');
   };
 
   const handleEditProduct = (product: Product) => {
-    navigate(`/products/edit/${product.id}`);
+    navigate(`/system/products/edit/${product.id}`);
   };
 
   const handleDeleteClick = (product: Product) => {
@@ -941,7 +941,7 @@ export const Products: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => navigate('/products/labels')}
+            onClick={() => navigate('/system/products/labels')}
             className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${
               theme === 'dark'
                 ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
@@ -2006,7 +2006,7 @@ export const Products: React.FC = () => {
             </button>
           ) : (
             <button 
-              onClick={() => navigate('/products/create')}
+              onClick={() => navigate('/system/products/create')}
               className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 mx-auto"
             >
               <Plus className="w-5 h-5" />

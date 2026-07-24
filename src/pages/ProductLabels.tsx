@@ -324,7 +324,7 @@ export const ProductLabels: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 flex-shrink-0">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/products')}
+            onClick={() => navigate('/system/products')}
             className={`p-2 rounded-xl transition-colors ${
               theme === 'dark'
                 ? 'hover:bg-slate-800 text-slate-400 hover:text-white'

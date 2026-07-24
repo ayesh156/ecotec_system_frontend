@@ -864,7 +864,7 @@ Thank you for your business! 🙏`;
             The invoice you're looking for doesn't exist or has been deleted.
           </p>
           <button
-            onClick={() => navigate('/invoices')}
+            onClick={() => navigate('/system/invoices')}
             className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all"
           >
             Back to Invoices
@@ -1054,7 +1054,7 @@ Thank you for your business! 🙏`;
         <div className="flex items-center justify-between gap-1 sm:gap-2">
           {/* Left: Back button */}
           <button
-            onClick={() => navigate('/invoices')}
+            onClick={() => navigate('/system/invoices')}
             className={`p-1.5 sm:p-2 md:p-2.5 rounded-xl border transition-all flex-shrink-0 ${
               theme === 'dark'
                 ? 'border-slate-700 hover:bg-slate-800 text-slate-400'

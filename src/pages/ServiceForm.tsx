@@ -204,7 +204,7 @@ export const ServiceForm: React.FC = () => {
       };
 
       console.log('Service saved:', serviceData);
-      navigate('/services');
+      navigate('/system/services');
     } catch (error) {
       console.error('Error saving service:', error);
     } finally {
@@ -231,7 +231,7 @@ export const ServiceForm: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/services')}
+            onClick={() => navigate('/system/services')}
             className={`p-2 rounded-xl transition-colors ${
               theme === 'dark'
                 ? 'hover:bg-slate-800 text-slate-400'
@@ -558,7 +558,7 @@ export const ServiceForm: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center justify-end gap-3">
           <button
             type="button"
-            onClick={() => navigate('/services')}
+            onClick={() => navigate('/system/services')}
             className={`w-full sm:w-auto px-6 py-3 rounded-xl font-medium transition-colors ${
               theme === 'dark'
                 ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'

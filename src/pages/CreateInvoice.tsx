@@ -709,7 +709,7 @@ export const CreateInvoice: React.FC = () => {
   const handleClosePrintAndNavigate = () => {
     setShowPrintPreview(false);
     if (createdInvoice) {
-      navigate(`/invoices/${createdInvoice.id}`);
+      navigate(`/system/invoices/${createdInvoice.id}`);
     }
   };
 
@@ -994,7 +994,7 @@ export const CreateInvoice: React.FC = () => {
       {/* Back Button and Title */}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => navigate('/invoices')}
+          onClick={() => navigate('/system/invoices')}
           className={`p-2 rounded-xl transition-colors ${
             theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
           }`}
@@ -1051,7 +1051,7 @@ export const CreateInvoice: React.FC = () => {
         theme === 'dark' ? 'bg-slate-800/50' : 'bg-white shadow-sm'
       }`}>
       <button
-        onClick={() => navigate('/invoices')}
+        onClick={() => navigate('/system/invoices')}
         className={`p-2 rounded-xl transition-colors ${
           theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
         }`}

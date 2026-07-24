@@ -159,8 +159,8 @@ export const Services: React.FC = () => {
   };
 
   // Handlers
-  const handleAddService = () => navigate('/services/add');
-  const handleEditService = (service: Service) => navigate(`/services/edit/${service.id}`);
+  const handleAddService = () => navigate('/system/services/add');
+  const handleEditService = (service: Service) => navigate(`/system/services/edit/${service.id}`);
   const handleViewService = (service: Service) => {
     setSelectedService(service);
     setIsViewModalOpen(true);

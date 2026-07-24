@@ -25,7 +25,7 @@ export const Login: React.FC = () => {
   }, [location]);
 
   useEffect(() => {
-    if (isAuthenticated && !isLoading) navigate('/dashboard', { replace: true });
+    if (isAuthenticated && !isLoading) navigate('/system/dashboard', { replace: true });
   }, [isAuthenticated, isLoading, navigate]);
 
   useEffect(() => { return () => clearError(); }, [clearError]);
@@ -43,7 +43,7 @@ export const Login: React.FC = () => {
     setSuccessMessage(null);
     try {
       await login(formData);
-      navigate('/dashboard', { replace: true });
+      navigate('/system/dashboard', { replace: true });
     } catch { /* handled by context */ } finally {
       setIsSubmitting(false);
     }

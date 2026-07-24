@@ -497,7 +497,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     >
       {/* Logo Section - Shop Branding */}
       <div className={`flex items-center h-16 px-4 border-b ${theme === 'dark' ? 'border-slate-800/50' : 'border-slate-200'}`}>
-        <Link to="/" className="flex items-center gap-3 group">
+        <Link to="/system/dashboard" className="flex items-center gap-3 group">
           {user?.role === 'SUPER_ADMIN' ? (
             // SUPER_ADMIN not viewing a shop: Show Ecosystem branding
             <>
@@ -1546,12 +1546,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                       )}
                     </div>
                     <div className="py-2">
-                      <Link to="/settings" className={`flex items-center gap-3 px-4 py-2 text-sm ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'
+                      <Link to="/system/settings" className={`flex items-center gap-3 px-4 py-2 text-sm ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'
                         }`}>
                         <Settings className="w-4 h-4" />
                         Settings
                       </Link>
-                      <Link to="/help" className={`flex items-center gap-3 px-4 py-2 text-sm ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'
+                      <Link to="/system/help" className={`flex items-center gap-3 px-4 py-2 text-sm ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'
                         }`}>
                         <HelpCircle className="w-4 h-4" />
                         Help & Support

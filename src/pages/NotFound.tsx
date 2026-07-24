@@ -20,7 +20,7 @@ const NotFound: React.FC = () => {
         Page not found
       </p>
       <Link 
-        to="/"
+        to="/system/dashboard"
         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
       >
         <Home className="w-5 h-5" />
