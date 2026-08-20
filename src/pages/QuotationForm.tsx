@@ -12,7 +12,7 @@ import { PrintableQuotation } from '../components/PrintableQuotation';
 import {
   ArrowLeft, Save, Printer, User, Phone, Mail, MapPin,
   Package, FileText, Calendar, UserPlus, Search, X,
-  ChevronLeft, ChevronRight, AlertCircle, Plus, Trash2, Percent,
+  ChevronLeft, ChevronRight, AlertCircle, Plus, Trash2,
   Download, Eye, Calculator, Clock
 } from 'lucide-react';
 
@@ -77,6 +77,29 @@ const generateQuotationNumber = () => {
   return `QUO-${year}-${random}`;
 };
 
+// Lightweight customer shape used for the selected-customer card
+interface SelectedCustomer {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+}
+
+// Safe numeric sanitization — prevents NaN, negative values, or empty strings
+// from ever propagating to React inputs or the backend schema validators.
+const toSafeNumber = (
+  value: string | number | null | undefined,
+  fallback = 0,
+  min = 0,
+  max?: number
+): number => {
+  const parsed = typeof value === 'number' ? value : parseFloat(value ?? '');
+  if (Number.isNaN(parsed)) return fallback;
+  const clamped = Math.max(min, parsed);
+  return max !== undefined ? Math.min(max, clamped) : clamped;
+};
+
 // Initial Form Data
 const initialFormData: FormData = {
   customerId: '',
@@ -116,6 +139,37 @@ const defaultTermsTemplates = [
   },
 ];
 
+interface QuotationFormLocationState {
+  duplicateFrom?: DuplicateFromData;
+  viewMode?: boolean;
+}
+
+interface DuplicateFromData {
+  customerId?: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  customerAddress?: string;
+  items: Array<{
+    id: string;
+    productId?: string;
+    productName: string;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    discount: number;
+    total: number;
+  }>;
+  subtotal: number;
+  discountPercent: number;
+  discountAmount: number;
+  taxPercent: number;
+  taxAmount: number;
+  total: number;
+  notes?: string;
+  terms?: string;
+}
+
 export const QuotationForm: React.FC = () => {
   const { theme } = useTheme();
   const { branding: shopBranding } = useShopBranding();
@@ -123,8 +177,9 @@ export const QuotationForm: React.FC = () => {
   const { id } = useParams();
   const location = useLocation();
   const isEditing = !!id;
-  const isDuplicating = !!(location.state as any)?.duplicateFrom;
-  const isViewMode = !!(location.state as any)?.viewMode;
+  const locationState = (location.state || {}) as QuotationFormLocationState;
+  const isDuplicating = !!locationState.duplicateFrom;
+  const isViewMode = !!locationState.viewMode;
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -137,6 +192,9 @@ export const QuotationForm: React.FC = () => {
   // Customer Search
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
+  // Currently verified customer shown as the selected customer card
+  const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
   
   // Product Search
   const [productSearch, setProductSearch] = useState('');
@@ -159,12 +217,14 @@ export const QuotationForm: React.FC = () => {
   // Preview State
   const [showPreview, setShowPreview] = useState(false);
 
-  // Debounced live customer search against the backend
+  // Debounced LIVE customer search against GET /api/v1/customers?search=...
+  // Typing just 1 character (e.g. "a") queries the database so real customers appear.
   useEffect(() => {
-    if (!customerSearch || customerSearch.trim().length < 2) {
+    if (!customerSearch || customerSearch.trim().length === 0) {
       setApiCustomers([]);
       return;
     }
+    setIsSearchingCustomers(true);
     const timer = setTimeout(async () => {
       try {
         const result = await customerService.getAll({ search: customerSearch.trim(), limit: 8 });
@@ -172,16 +232,31 @@ export const QuotationForm: React.FC = () => {
       } catch (error) {
         console.error('Failed to fetch customers:', error);
         setApiCustomers([]);
+      } finally {
+        setIsSearchingCustomers(false);
       }
-    }, 350);
+    }, 300);
     return () => clearTimeout(timer);
   }, [customerSearch]);
 
-  // Customers whose billing/snapshot fields exist are shown; otherwise fallback to a small static list
-  const filteredCustomers = useMemo(() => {
-    if (apiCustomers.length > 0) return apiCustomers;
-    return [];
-  }, [apiCustomers]);
+  // Load recent customers when the search field is focused with an empty query so
+  // the dropdown never silently shows "No customers found" without data.
+  const loadRecentCustomers = async () => {
+    if (customerSearch?.trim()) return;
+    try {
+      setIsSearchingCustomers(true);
+      const result = await customerService.getAll({ limit: 8 });
+      setApiCustomers(result.customers);
+    } catch (error) {
+      console.error('Failed to fetch recent customers:', error);
+      setApiCustomers([]);
+    } finally {
+      setIsSearchingCustomers(false);
+    }
+  };
+
+  // Customers from the live backend search.
+  const filteredCustomers = useMemo(() => apiCustomers, [apiCustomers]);
 
   // Filter products for search
   const filteredProducts = useMemo(() => {
@@ -197,31 +272,7 @@ export const QuotationForm: React.FC = () => {
   useEffect(() => {
     // Handle duplicate mode - copy data from the quotation passed via route state
     if (isDuplicating) {
-      const duplicateQuotation = (location.state as any)?.duplicateFrom as {
-        customerId?: string;
-        customerName: string;
-        customerPhone: string;
-        customerEmail?: string;
-        customerAddress?: string;
-        items: Array<{
-          id: string;
-          productId?: string;
-          productName: string;
-          description: string;
-          quantity: number;
-          unitPrice: number;
-          discount: number;
-          total: number;
-        }>;
-        subtotal: number;
-        discountPercent: number;
-        discountAmount: number;
-        taxPercent: number;
-        taxAmount: number;
-        total: number;
-        notes?: string;
-        terms?: string;
-      };
+      const duplicateQuotation = locationState.duplicateFrom;
       if (duplicateQuotation) {
         setIsLoadingQuotation(true);
         setQuotationNumber(generateQuotationNumber());
@@ -250,7 +301,14 @@ export const QuotationForm: React.FC = () => {
           terms: duplicateQuotation.terms || '',
           internalNotes: '', // Clear internal notes for duplicate
         });
-        setCustomerSearch(duplicateQuotation.customerName);
+        setSelectedCustomer({
+          id: duplicateQuotation.customerId || '',
+          name: duplicateQuotation.customerName,
+          phone: duplicateQuotation.customerPhone,
+          email: duplicateQuotation.customerEmail,
+          address: duplicateQuotation.customerAddress,
+        });
+        setCustomerSearch('');
         setTimeout(() => setIsLoadingQuotation(false), 100);
       }
       return;
@@ -303,8 +361,11 @@ export const QuotationForm: React.FC = () => {
             terms: apiQuotation.terms || '',
             internalNotes: '',
           });
-          // Pre-fill customer search so the form shows the saved customer
-          setCustomerSearch(apiQuotation.customer?.name || '');
+          // Bind the saved customer so the search bar transitions directly into
+          // the selected customer view card (Edit mode hydration)
+          setSelectedCustomer(apiQuotation.customer || null);
+          hydratedRef.current = true;
+          setCustomerSearch('');
 
           // If view mode, show preview automatically
           if (isViewMode) {
@@ -324,7 +385,14 @@ export const QuotationForm: React.FC = () => {
   useEffect(() => {
     // Don't recalculate while loading quotation data
     if (isLoadingQuotation) return;
-    
+
+    // On Edit hydration, keep the server-authoritative subtotal / discount /
+    // tax values exactly as saved. The next user-driven change triggers recalc.
+    if (hydratedRef.current) {
+      hydratedRef.current = false;
+      return;
+    }
+
     const subtotal = formData.items.reduce((sum, item) => sum + item.total, 0);
     const discountAmount = (subtotal * formData.discountPercent) / 100;
     const afterDiscount = subtotal - discountAmount;
@@ -381,6 +449,7 @@ export const QuotationForm: React.FC = () => {
       customerAddress: customer.address || '',
       isNewCustomer: false,
     }));
+    setSelectedCustomer(customer);
     setCustomerSearch('');
     setShowCustomerDropdown(false);
     if (errors.customerName) setErrors(prev => ({ ...prev, customerName: '' }));
@@ -396,6 +465,8 @@ export const QuotationForm: React.FC = () => {
       customerAddress: '',
       isNewCustomer: true,
     }));
+    setSelectedCustomer(null);
+    setCustomerSearch('');
     setShowCustomerDropdown(false);
   };
 
@@ -409,6 +480,8 @@ export const QuotationForm: React.FC = () => {
       customerAddress: '',
       isNewCustomer: false,
     }));
+    setSelectedCustomer(null);
+    setCustomerSearch('');
   };
 
   // Product/Item handlers
@@ -469,14 +542,22 @@ export const QuotationForm: React.FC = () => {
       ...prev,
       items: prev.items.map(item => {
         if (item.id !== itemId) return item;
-        
+
         const updatedItem = { ...item, [field]: value };
-        
-        // Recalculate total if quantity, price, or discount changes
+
+        // Recalculate total if quantity, price, or discount changes.
+        // Sanitize each numeric field so NaN / negative / >100% never
+        // propagate into the UI state or the API payload.
         if (field === 'quantity' || field === 'unitPrice' || field === 'discount') {
-          updatedItem.total = updatedItem.quantity * updatedItem.unitPrice * (1 - updatedItem.discount / 100);
+          const qty = toSafeNumber(updatedItem.quantity, 1, 1);
+          const price = toSafeNumber(updatedItem.unitPrice, 0, 0);
+          const disc = toSafeNumber(updatedItem.discount, 0, 0, 100);
+          updatedItem.quantity = qty;
+          updatedItem.unitPrice = price;
+          updatedItem.discount = disc;
+          updatedItem.total = qty * price * (1 - disc / 100);
         }
-        
+
         return updatedItem;
       }),
     }));
@@ -519,25 +600,30 @@ export const QuotationForm: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const savedQuotationIdRef = useRef<string | null>(null);
+  // Set to true after Edit hydration so the first totals-recalc pass is skipped
+  // (preserving the server-authoritative financial values exactly).
+  const hydratedRef = useRef(false);
 
-  // Build the API payload with strict numeric coercion and proper enum status
-  const buildPayload = (status: QuotationStatus = 'draft') => {
+  // Build the API payload with strict numeric coercion and proper enum status.
+  // customerIdOverride lets the save routine inject a freshly-created customer's
+  // real database primary key when the user added a new customer inline.
+  const buildPayload = (status: QuotationStatus = 'draft', customerIdOverride?: string) => {
     const apiStatus: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'CONVERTED' =
       status === 'sent' ? 'SENT' : status === 'accepted' ? 'ACCEPTED' : status === 'rejected' ? 'REJECTED' : 'DRAFT';
 
     return {
-      customerId: formData.customerId || '',
+      customerId: customerIdOverride || formData.customerId || '',
       items: formData.items.map(item => ({
         itemType: 'PRODUCT' as const,
         ...(item.productId && item.productId !== '0' ? { productId: item.productId } : {}),
         description: item.productName || item.description || 'Custom item',
-        quantity: Number(item.quantity) || 1,
-        unitPrice: Number(item.unitPrice) || 0,
-        discount: Number(item.discount) || 0,
+        quantity: toSafeNumber(item.quantity, 1, 1),
+        unitPrice: toSafeNumber(item.unitPrice, 0, 0),
+        discount: toSafeNumber(item.discount, 0, 0, 100),
       })),
       status: apiStatus,
-      discountTotal: Number(formData.discountAmount) || 0,
-      taxTotal: Number(formData.taxAmount) || 0,
+      discountTotal: toSafeNumber(formData.discountAmount, 0, 0),
+      taxTotal: toSafeNumber(formData.taxAmount, 0, 0),
       validityDate: formData.expiryDate || undefined,
       notes: formData.notes || undefined,
       terms: formData.terms || undefined,
@@ -557,7 +643,29 @@ export const QuotationForm: React.FC = () => {
     if (!validateForm()) return null;
     setIsSaving(true);
     try {
-      const payload = buildPayload(status);
+      // ─────────────────────────────────────────────────────────────────────────
+      // CRITICAL FIX: Inline Customer Creation Workflow
+      // ─────────────────────────────────────────────────────────────────────────
+      // When the user clicks "Add as new customer" and fills in the fields, the
+      // form has NO valid database customer id yet. The backend validator rejects
+      // an empty customerId with "Customer ID is required", so we MUST persist the
+      // Customer FIRST via POST /api/v1/customers, get the real primary key back,
+      // and only then submit the Quotation with that valid customerId.
+      let customerId = formData.customerId;
+      if (formData.isNewCustomer || !formData.customerId) {
+        const createdCustomer = await customerService.create({
+          name: formData.customerName.trim(),
+          phone: formData.customerPhone.trim(),
+          email: formData.customerEmail.trim() || undefined,
+          address: formData.customerAddress.trim() || undefined,
+        });
+        customerId = createdCustomer.id;
+        // Reflect the persisted customer so the UI card/state stays consistent
+        setFormData(prev => ({ ...prev, customerId: createdCustomer.id, isNewCustomer: false }));
+        toast.success(`New customer "${createdCustomer.name}" created successfully`);
+      }
+
+      const payload = buildPayload(status, customerId);
       if (isEditing && id) {
         await quotationService.update(id, payload);
         savedQuotationIdRef.current = id;
@@ -851,41 +959,82 @@ export const QuotationForm: React.FC = () => {
                         setCustomerSearch(e.target.value);
                         setShowCustomerDropdown(true);
                       }}
-                      onFocus={() => setShowCustomerDropdown(true)}
+                      onFocus={() => { setShowCustomerDropdown(true); loadRecentCustomers(); }}
                       className={`${inputClasses} pl-10`}
                     />
                   </div>
 
                   {/* Customer Dropdown */}
-                  {showCustomerDropdown && customerSearch && (
+                  {showCustomerDropdown && (customerSearch.trim() || apiCustomers.length > 0) && (
                     <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl border shadow-2xl z-[100] overflow-hidden max-h-80 overflow-y-auto ${
-                      theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
+                      theme === 'dark'
+                        ? 'bg-slate-800/95 border-slate-700 backdrop-blur-xl'
+                        : 'bg-white border-slate-200'
                     }`}>
                       {filteredCustomers.length > 0 ? (
                         <>
+                          <div className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider sticky top-0 ${
+                            theme === 'dark'
+                              ? 'text-slate-500 bg-slate-800/95 backdrop-blur-xl'
+                              : 'text-slate-500 bg-white'
+                          }`}>
+                            Matching Customers
+                          </div>
                           {filteredCustomers.map((customer) => (
                             <button
                               key={customer.id}
                               type="button"
                               onClick={() => handleCustomerSelect(customer)}
                               className={`w-full px-4 py-3 text-left transition-colors ${
-                                theme === 'dark' ? 'hover:bg-slate-700' : 'hover:bg-slate-50'
+                                theme === 'dark' ? 'hover:bg-slate-700/70' : 'hover:bg-slate-50'
                               }`}
                             >
-                              <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                                {customer.name}
-                              </p>
-                              <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-                                {customer.phone} • {customer.email}
-                              </p>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                                  theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-100'
+                                }`}>
+                                  <User className="w-4 h-4 text-emerald-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                                    {customer.name}
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
+                                      theme === 'dark'
+                                        ? 'bg-slate-700/70 text-slate-300'
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}>
+                                      <Phone className="w-3 h-3" />
+                                      {customer.phone}
+                                    </span>
+                                    {customer.email && (
+                                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
+                                        theme === 'dark'
+                                          ? 'bg-slate-700/70 text-slate-300'
+                                          : 'bg-slate-100 text-slate-600'
+                                      }`}>
+                                        <Mail className="w-3 h-3" />
+                                        {customer.email}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 shrink-0 opacity-40" />
+                              </div>
                             </button>
                           ))}
                         </>
+                      ) : isSearchingCustomers ? (
+                        <div className={`px-4 py-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Searching customers...
+                        </div>
                       ) : (
                         <div className={`px-4 py-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-                          No customers found
+                          No customers found for "{customerSearch}".
                         </div>
                       )}
+                      {customerSearch.trim() && (
                       <button
                         type="button"
                         onClick={handleNewCustomer}
@@ -898,6 +1047,7 @@ export const QuotationForm: React.FC = () => {
                         <UserPlus className="w-4 h-4" />
                         Add "{customerSearch}" as new customer
                       </button>
+                      )}
                     </div>
                   )}
 
@@ -922,7 +1072,7 @@ export const QuotationForm: React.FC = () => {
                       </div>
                       <div>
                         <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                          {formData.customerName}
+                          {selectedCustomer?.name || formData.customerName}
                         </p>
                         {formData.isNewCustomer && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500">
@@ -1136,7 +1286,7 @@ export const QuotationForm: React.FC = () => {
                             type="number"
                             min="1"
                             value={item.quantity}
-                            onChange={(e) => handleUpdateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                            onChange={(e) => handleUpdateItem(item.id, 'quantity', e.target.value)}
                             className={`${inputClasses} text-center`}
                           />
                         </div>
@@ -1149,7 +1299,7 @@ export const QuotationForm: React.FC = () => {
                             min="0"
                             step="0.01"
                             value={item.unitPrice}
-                            onChange={(e) => handleUpdateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleUpdateItem(item.id, 'unitPrice', e.target.value)}
                             className={`${inputClasses} text-right ${errors[`item_${actualIndex}_price`] ? 'border-red-500' : ''}`}
                           />
                         </div>
@@ -1162,7 +1312,7 @@ export const QuotationForm: React.FC = () => {
                             min="0"
                             max="100"
                             value={item.discount}
-                            onChange={(e) => handleUpdateItem(item.id, 'discount', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleUpdateItem(item.id, 'discount', e.target.value)}
                             className={`${inputClasses} text-center`}
                           />
                         </div>
@@ -1401,7 +1551,7 @@ export const QuotationForm: React.FC = () => {
                       min="1"
                       max="365"
                       value={formData.validityDays}
-                      onChange={(e) => handleInputChange('validityDays', parseInt(e.target.value) || 30)}
+                      onChange={(e) => handleInputChange('validityDays', toSafeNumber(e.target.value, 30, 1, 365))}
                       className={`${inputClasses} w-20 text-center`}
                     />
                     <span className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>days</span>
@@ -1455,51 +1605,87 @@ export const QuotationForm: React.FC = () => {
                 </div>
 
                 {/* Discount */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Discount</span>
-                    <div className="flex items-center">
+                <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-all ${
+                  theme === 'dark'
+                    ? 'bg-slate-800/30 border-slate-700/50'
+                    : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-medium ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Discount
+                    </span>
+                    <div className={`flex items-center rounded-lg overflow-hidden border transition-all focus-within:border-cyan-500/50 focus-within:ring-2 focus-within:ring-cyan-500/20 ${
+                      theme === 'dark'
+                        ? 'bg-slate-900/70 border-slate-600/60'
+                        : 'bg-white border-slate-300'
+                    }`}>
                       <input
                         type="number"
                         min="0"
                         max="100"
+                        step="0.01"
+                        inputMode="decimal"
+                        placeholder="0"
                         value={formData.discountPercent}
-                        onChange={(e) => handleInputChange('discountPercent', parseFloat(e.target.value) || 0)}
-                        className={`w-16 px-2 py-1 rounded-lg border text-center text-sm ${
-                          theme === 'dark'
-                            ? 'bg-slate-800 border-slate-700 text-white'
-                            : 'bg-white border-slate-200 text-slate-900'
+                        onChange={(e) => handleInputChange('discountPercent', toSafeNumber(e.target.value, 0, 0, 100))}
+                        className={`w-14 px-2 py-1.5 text-center text-sm font-semibold bg-transparent outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                          theme === 'dark' ? 'text-white placeholder-slate-600' : 'text-slate-900 placeholder-slate-400'
                         }`}
                       />
-                      <Percent className={`w-3.5 h-3.5 ml-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
+                      <span className={`px-2 py-1.5 text-xs font-bold border-l ${
+                        theme === 'dark'
+                          ? 'bg-slate-800/80 text-cyan-400 border-slate-600/60'
+                          : 'bg-slate-100 text-cyan-600 border-slate-300'
+                      }`}>
+                        %
+                      </span>
                     </div>
                   </div>
-                  <span className="text-red-500 font-medium">
+                  <span className="text-sm font-semibold text-red-500 whitespace-nowrap">
                     -{formatCurrency(formData.discountAmount)}
                   </span>
                 </div>
 
                 {/* Tax */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Tax</span>
-                    <div className="flex items-center">
+                <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-all ${
+                  theme === 'dark'
+                    ? 'bg-slate-800/30 border-slate-700/50'
+                    : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-medium ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Tax
+                    </span>
+                    <div className={`flex items-center rounded-lg overflow-hidden border transition-all focus-within:border-cyan-500/50 focus-within:ring-2 focus-within:ring-cyan-500/20 ${
+                      theme === 'dark'
+                        ? 'bg-slate-900/70 border-slate-600/60'
+                        : 'bg-white border-slate-300'
+                    }`}>
                       <input
                         type="number"
                         min="0"
                         max="100"
+                        step="0.01"
+                        inputMode="decimal"
+                        placeholder="0"
                         value={formData.taxPercent}
-                        onChange={(e) => handleInputChange('taxPercent', parseFloat(e.target.value) || 0)}
-                        className={`w-16 px-2 py-1 rounded-lg border text-center text-sm ${
-                          theme === 'dark'
-                            ? 'bg-slate-800 border-slate-700 text-white'
-                            : 'bg-white border-slate-200 text-slate-900'
+                        onChange={(e) => handleInputChange('taxPercent', toSafeNumber(e.target.value, 0, 0, 100))}
+                        className={`w-14 px-2 py-1.5 text-center text-sm font-semibold bg-transparent outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                          theme === 'dark' ? 'text-white placeholder-slate-600' : 'text-slate-900 placeholder-slate-400'
                         }`}
                       />
-                      <Percent className={`w-3.5 h-3.5 ml-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
+                      <span className={`px-2 py-1.5 text-xs font-bold border-l ${
+                        theme === 'dark'
+                          ? 'bg-slate-800/80 text-cyan-400 border-slate-600/60'
+                          : 'bg-slate-100 text-cyan-600 border-slate-300'
+                      }`}>
+                        %
+                      </span>
                     </div>
                   </div>
-                  <span className={`font-medium ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <span className={`text-sm font-semibold whitespace-nowrap ${
+                    theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                  }`}>
                     +{formatCurrency(formData.taxAmount)}
                   </span>
                 </div>
