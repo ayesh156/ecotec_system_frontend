@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { mockCustomers, mockProducts, mockQuotations } from '../data/mockData';
 import type { Customer, Product } from '../data/mockData';
 import { quotationService } from '../services/quotationService';
+import { useShopBranding } from '../contexts/ShopBrandingContext';
 import { PrintableQuotation } from '../components/PrintableQuotation';
 import {
   ArrowLeft, Save, Printer, User, Phone, Mail, MapPin,
@@ -115,6 +116,7 @@ const defaultTermsTemplates = [
 
 export const QuotationForm: React.FC = () => {
   const { theme } = useTheme();
+  const { branding: shopBranding } = useShopBranding();
   const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
@@ -455,44 +457,69 @@ export const QuotationForm: React.FC = () => {
   };
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const savedQuotationIdRef = useRef<string | null>(null);
 
-  const handleSubmit = async (status: QuotationStatus = 'draft') => {
-    if (!validateForm()) return;
+  // Build the API payload with strict numeric coercion and proper enum status
+  const buildPayload = (status: QuotationStatus = 'draft') => {
+    const apiStatus: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'CONVERTED' =
+      status === 'sent' ? 'SENT' : status === 'accepted' ? 'ACCEPTED' : status === 'rejected' ? 'REJECTED' : 'DRAFT';
+
+    return {
+      customerId: formData.customerId || '',
+      items: formData.items.map(item => ({
+        itemType: 'PRODUCT' as const,
+        ...(item.productId && item.productId !== '0' ? { productId: item.productId } : {}),
+        description: item.productName || item.description || 'Custom item',
+        quantity: Number(item.quantity) || 1,
+        unitPrice: Number(item.unitPrice) || 0,
+        discount: Number(item.discount) || 0,
+      })),
+      status: apiStatus,
+      discountTotal: Number(formData.discountAmount) || 0,
+      taxTotal: Number(formData.taxAmount) || 0,
+      validityDate: formData.expiryDate || undefined,
+      notes: formData.notes || undefined,
+      terms: formData.terms || undefined,
+    };
+  };
+
+  // Extract the exact API error message so the user sees what went wrong
+  const getServerErrorMessage = (error: unknown): string => {
+    if (error instanceof Error && error.message) {
+      return error.message.replace(/^Error:\s*/i, '');
+    }
+    return 'Failed to save quotation. Please check your details and try again.';
+  };
+
+  // Shared save routine: returns the persisted quotation id on success, null on failure
+  const saveCurrentQuotation = async (status: QuotationStatus = 'draft'): Promise<string | null> => {
+    if (!validateForm()) return null;
     setIsSaving(true);
     try {
-      const apiStatus: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'CONVERTED' =
-        status === 'sent' ? 'SENT' : status === 'accepted' ? 'ACCEPTED' : status === 'rejected' ? 'REJECTED' : 'DRAFT';
-      const payload = {
-        customerId: formData.customerId || '',
-        items: formData.items.map(item => ({
-          itemType: 'PRODUCT' as const,
-          ...(item.productId ? { productId: item.productId } : {}),
-          description: item.productName || item.description || 'Custom item',
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discount: item.discount || 0,
-        })),
-        status: apiStatus,
-        discountTotal: formData.discountAmount,
-        taxTotal: formData.taxAmount,
-        validityDate: formData.expiryDate,
-        notes: formData.notes || undefined,
-        terms: formData.terms || undefined,
-      };
+      const payload = buildPayload(status);
       if (isEditing && id) {
         await quotationService.update(id, payload);
+        savedQuotationIdRef.current = id;
         toast.success('Quotation updated successfully');
-      } else {
-        await quotationService.create(payload);
-        toast.success('Quotation created successfully');
+        return id;
       }
-      navigate('/system/quotations');
+      const created = await quotationService.create(payload);
+      savedQuotationIdRef.current = created.id;
+      toast.success(`Quotation ${created.quotationNumber} created successfully`);
+      return created.id;
     } catch (error) {
       console.error('Failed to save quotation:', error);
-      toast.error('Failed to save quotation');
+      toast.error(getServerErrorMessage(error), { duration: 6000 });
+      return null;
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSubmit = async (status: QuotationStatus = 'draft') => {
+    const savedId = await saveCurrentQuotation(status);
+    if (savedId) navigate('/system/quotations');
   };
 
   // Get quotation data for print/preview
@@ -515,43 +542,51 @@ export const QuotationForm: React.FC = () => {
     terms: formData.terms || undefined,
   });
 
-  // Print handler
-  const handlePrint = () => {
-    setTimeout(() => {
-      if (printRef.current) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write('<html><head><title>Quotation - ' + (isEditing ? `QUO-${id}` : quotationNumber) + '</title></head><body>');
-          printWindow.document.write(printRef.current.innerHTML);
-          printWindow.document.write('</body></html>');
-          printWindow.document.close();
-          setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-          }, 250);
-        }
-      }
-    }, 100);
+    const ensureSavedForPrint = async (): Promise<string | null> => {
+    if (savedQuotationIdRef.current) return savedQuotationIdRef.current;
+    return saveCurrentQuotation('draft');
   };
 
-  // Download PDF handler
-  const handleDownloadPDF = () => {
-    setTimeout(() => {
-      if (printRef.current) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write('<html><head><title>Quotation - ' + (isEditing ? `QUO-${id}` : quotationNumber) + '</title>');
-          printWindow.document.write('<style>@media print { @page { size: A4 portrait; margin: 0; } }</style>');
-          printWindow.document.write('</head><body>');
-          printWindow.document.write(printRef.current.innerHTML);
-          printWindow.document.write('</body></html>');
-          printWindow.document.close();
-          setTimeout(() => {
-            printWindow.print();
-          }, 250);
-        }
-      }
-    }, 100);
+  const openPrintWindow = (downloadAsPdf: boolean): void => {
+    if (!printRef.current) return;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const qNum = savedQuotationIdRef.current ? 'QUO-' + savedQuotationIdRef.current : quotationNumber;
+    win.document.write('<html><head><title>Quotation - ' + qNum + '</title></head><body>');
+    win.document.write(printRef.current.innerHTML);
+    win.document.write('</body></html>');
+    win.document.close();
+    setTimeout(() => { win.print(); win.close(); }, 350);
+  };
+
+  const handlePrint = async () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+    try {
+      const id = await ensureSavedForPrint();
+      if (!id) return;
+      toast.success('Quotation saved - opening print dialog');
+      openPrintWindow(false);
+      navigate('/system/quotations');
+    } catch (err) {
+      console.error('Print failed:', err);
+      toast.error('Failed to open print. Please try again.');
+    } finally { setIsPrinting(false); }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+    try {
+      const id = await ensureSavedForPrint();
+      if (!id) return;
+      toast.success('Quotation saved - preparing PDF export');
+      openPrintWindow(true);
+      navigate('/system/quotations');
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      toast.error('Failed to prepare PDF. Please try again.');
+    } finally { setIsPrinting(false); }
   };
 
   // Formatting helpers
@@ -1489,7 +1524,7 @@ export const QuotationForm: React.FC = () => {
 
       {/* Hidden Printable Component */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
-        <PrintableQuotation ref={printRef} quotation={getQuotationData()} />
+        <PrintableQuotation ref={printRef} quotation={getQuotationData()} branding={shopBranding} />
       </div>
 
       {/* Preview Modal */}
@@ -1525,7 +1560,7 @@ export const QuotationForm: React.FC = () => {
             </div>
             {/* Preview Content */}
             <div className="p-4 overflow-auto" style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
-              <PrintableQuotation quotation={getQuotationData()} />
+              <PrintableQuotation quotation={getQuotationData()} branding={shopBranding} />
             </div>
           </div>
         </div>

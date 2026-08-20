@@ -38,6 +38,8 @@ interface QuotationBranding {
   address?: string;
   phone?: string;
   email?: string;
+  tagline?: string;
+  website?: string;
 }
 
 interface PrintableQuotationProps {
@@ -63,9 +65,13 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
       });
     };
 
-    const formatCurrency = (amount: number) => {
-      return `LKR ${amount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}`;
-    };
+  const formatCurrency = (amount: number) => {
+    return `LKR ${amount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}`;
+  };
+
+  const shopTagline = branding?.tagline || 'Computer Solutions';
+  const shopWebsite = branding?.website || 'www.ecosystem.lk';
+  const shopAddress = branding?.address || 'No.14, Mulatiyana junction, Mulatiyana, Matara.';
 
     return (
       <div ref={ref} className="print-quotation">
@@ -138,6 +144,22 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
             border-radius: 8px;
             object-fit: cover;
             border: 2px solid #000;
+            background: #fff;
+            flex-shrink: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .company-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            background: #fff;
           }
 
           .company-info h1 {
@@ -537,21 +559,20 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
         <div className="quotation-header">
           <div className="company-section">
             <div className="company-logo">
-              {hasCustomLogo ? (
-                <img src={shopLogo} alt="Shop Logo" />
-              ) : (
-                <div style={{ 
-                  width: '70px', 
-                  height: '70px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  background: 'linear-gradient(135deg, #10b981 0%, #3b82f6 100%)',
-                  borderRadius: '12px'
-                }}>
-                  <Building2 style={{ width: '40px', height: '40px', color: 'white', strokeWidth: 2 }} />
-                </div>
-              )}
+              {/* Always render the logo image; fall back to /logo.png on error.
+                  If even the fallback fails we hide the img and show the icon. */}
+              <img
+                src={shopLogo}
+                alt={`${shopName} ${shopSubName || ''} Logo`.trim()}
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.src.endsWith('/logo.png')) {
+                    img.src = '/logo.png';
+                  } else {
+                    img.style.display = 'none';
+                  }
+                }}
+              />
             </div>
             <div className="company-info">
               <h1>{shopName}{shopSubName && ` ${shopSubName}`}</h1>
