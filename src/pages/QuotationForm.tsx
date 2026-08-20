@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '../contexts/ThemeContext';
-import { mockCustomers, mockProducts, mockQuotations } from '../data/mockData';
+import { mockProducts } from '../data/mockData';
 import type { Customer, Product } from '../data/mockData';
 import { quotationService } from '../services/quotationService';
+import type { APICustomer } from '../services/customerService';
+import { customerService } from '../services/customerService';
 import { useShopBranding } from '../contexts/ShopBrandingContext';
 import { PrintableQuotation } from '../components/PrintableQuotation';
 import {
@@ -126,9 +128,12 @@ export const QuotationForm: React.FC = () => {
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [quotationNumber] = useState(generateQuotationNumber());
+  // quotationNumber is initialized fresh for create mode; will be replaced by the API value for edit mode
+  const [quotationNumber, setQuotationNumber] = useState(generateQuotationNumber());
   const [isLoadingQuotation, setIsLoadingQuotation] = useState(false);
   
+  // Live customer search from backend API
+  const [apiCustomers, setApiCustomers] = useState<APICustomer[]>([]);
   // Customer Search
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
@@ -154,16 +159,29 @@ export const QuotationForm: React.FC = () => {
   // Preview State
   const [showPreview, setShowPreview] = useState(false);
 
-  // Filter customers for search
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return [];
-    const search = customerSearch.toLowerCase();
-    return mockCustomers.filter(c =>
-      c.name.toLowerCase().includes(search) ||
-      c.phone.includes(search) ||
-      c.email?.toLowerCase().includes(search)
-    ).slice(0, 5);
+  // Debounced live customer search against the backend
+  useEffect(() => {
+    if (!customerSearch || customerSearch.trim().length < 2) {
+      setApiCustomers([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const result = await customerService.getAll({ search: customerSearch.trim(), limit: 8 });
+        setApiCustomers(result.customers);
+      } catch (error) {
+        console.error('Failed to fetch customers:', error);
+        setApiCustomers([]);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
   }, [customerSearch]);
+
+  // Customers whose billing/snapshot fields exist are shown; otherwise fallback to a small static list
+  const filteredCustomers = useMemo(() => {
+    if (apiCustomers.length > 0) return apiCustomers;
+    return [];
+  }, [apiCustomers]);
 
   // Filter products for search
   const filteredProducts = useMemo(() => {
@@ -175,13 +193,38 @@ export const QuotationForm: React.FC = () => {
     ).slice(0, 8);
   }, [productSearch]);
 
-  // Load quotation data when editing or duplicating (MUST RUN FIRST)
+  // Load quotation data when editing or duplicating
   useEffect(() => {
-    // Handle duplicate mode - using mockQuotations as quotation data source
+    // Handle duplicate mode - copy data from the quotation passed via route state
     if (isDuplicating) {
-      const duplicateQuotation = (location.state as any)?.duplicateFrom;
+      const duplicateQuotation = (location.state as any)?.duplicateFrom as {
+        customerId?: string;
+        customerName: string;
+        customerPhone: string;
+        customerEmail?: string;
+        customerAddress?: string;
+        items: Array<{
+          id: string;
+          productId?: string;
+          productName: string;
+          description: string;
+          quantity: number;
+          unitPrice: number;
+          discount: number;
+          total: number;
+        }>;
+        subtotal: number;
+        discountPercent: number;
+        discountAmount: number;
+        taxPercent: number;
+        taxAmount: number;
+        total: number;
+        notes?: string;
+        terms?: string;
+      };
       if (duplicateQuotation) {
         setIsLoadingQuotation(true);
+        setQuotationNumber(generateQuotationNumber());
         setFormData({
           customerId: duplicateQuotation.customerId || '',
           customerName: duplicateQuotation.customerName,
@@ -192,9 +235,10 @@ export const QuotationForm: React.FC = () => {
           quotationDate: new Date().toISOString().split('T')[0], // New date for duplicate
           expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           validityDays: 30,
-          items: duplicateQuotation.items.map((item: any, idx: number) => ({
+          items: duplicateQuotation.items.map((item, idx: number) => ({
             ...item,
             id: `dup-item-${idx}-${Date.now()}`, // Generate new IDs
+            productId: item.productId || '',
           })),
           subtotal: duplicateQuotation.subtotal,
           discountPercent: duplicateQuotation.discountPercent,
@@ -212,51 +256,67 @@ export const QuotationForm: React.FC = () => {
       return;
     }
 
-    // Handle edit/view mode - using mockQuotations as quotation data source
+    // Handle edit/view mode - fetch live from backend API by id or quotationNumber
     if (isEditing && id) {
       setIsLoadingQuotation(true);
-      const quotation = mockQuotations.find(q => q.id === id);
-      if (quotation) {
-        setFormData({
-          customerId: quotation.customerId || '',
-          customerName: quotation.customerName,
-          customerPhone: quotation.customerPhone,
-          customerEmail: quotation.customerEmail || '',
-          customerAddress: quotation.customerAddress || '',
-          isNewCustomer: false,
-          quotationDate: quotation.quotationDate,
-          expiryDate: quotation.expiryDate,
-          validityDays: quotation.validityDays,
-          items: quotation.items.map(item => ({
-            id: item.id,
-            productId: item.productId || '',
-            productName: item.productName,
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            discount: item.discount,
-            total: item.total,
-          })),
-          subtotal: quotation.subtotal,
-          discountPercent: quotation.discountPercent,
-          discountAmount: quotation.discountAmount,
-          taxPercent: quotation.taxPercent,
-          taxAmount: quotation.taxAmount,
-          total: quotation.total,
-          notes: quotation.notes || '',
-          terms: quotation.terms || '',
-          internalNotes: quotation.internalNotes || '',
-        });
-        // Set customer search to show selected customer
-        setCustomerSearch(quotation.customerName);
-        
-        // If view mode, show preview automatically
-        if (isViewMode) {
-          setTimeout(() => setShowPreview(true), 200);
+      (async () => {
+        try {
+          const apiQuotation = await quotationService.getById(id);
+
+          // Set the actual quotation number from the API (prevents QUO-QUO- double prefix)
+          setQuotationNumber(apiQuotation.quotationNumber);
+          savedQuotationIdRef.current = apiQuotation.id;
+
+          setFormData({
+            customerId: apiQuotation.customerId || '',
+            customerName: apiQuotation.customer?.name || '',
+            customerPhone: apiQuotation.customer?.phone || '',
+            customerEmail: apiQuotation.customer?.email || '',
+            customerAddress: apiQuotation.customer?.address || '',
+            isNewCustomer: false,
+            quotationDate: apiQuotation.createdAt?.split('T')[0] || getDefaultDate(),
+            expiryDate: apiQuotation.validityDate?.split('T')[0] || getDefaultExpiryDate(30),
+            validityDays: apiQuotation.validityDate
+              ? Math.max(1, Math.round((new Date(apiQuotation.validityDate).getTime() - new Date(apiQuotation.createdAt).getTime()) / (24 * 60 * 60 * 1000)))
+              : 30,
+            items: (apiQuotation.items || []).map((item) => ({
+              id: item.id,
+              productId: item.productId || '',
+              productName: item.product?.name || item.description,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discount: item.discount,
+              total: item.total,
+            })),
+            subtotal: apiQuotation.subtotal,
+            discountPercent: apiQuotation.discountTotal > 0 && apiQuotation.subtotal > 0
+              ? Math.round((apiQuotation.discountTotal / apiQuotation.subtotal) * 100)
+              : 0,
+            discountAmount: apiQuotation.discountTotal,
+            taxPercent: apiQuotation.taxTotal > 0 && apiQuotation.subtotal > 0
+              ? Math.round((apiQuotation.taxTotal / apiQuotation.subtotal) * 100)
+              : 0,
+            taxAmount: apiQuotation.taxTotal,
+            total: apiQuotation.grandTotal,
+            notes: apiQuotation.notes || '',
+            terms: apiQuotation.terms || '',
+            internalNotes: '',
+          });
+          // Pre-fill customer search so the form shows the saved customer
+          setCustomerSearch(apiQuotation.customer?.name || '');
+
+          // If view mode, show preview automatically
+          if (isViewMode) {
+            setTimeout(() => setShowPreview(true), 200);
+          }
+        } catch (error) {
+          console.error('Failed to load quotation for edit:', error);
+          toast.error('Failed to load quotation. Please check the quotation ID or refresh.');
+        } finally {
+          setIsLoadingQuotation(false);
         }
-      }
-      // Allow a brief moment for state to settle before enabling calculations
-      setTimeout(() => setIsLoadingQuotation(false), 100);
+      })();
     }
   }, [id, isEditing, isDuplicating, isViewMode, location.state]);
 
@@ -311,13 +371,13 @@ export const QuotationForm: React.FC = () => {
   }, []);
 
   // Customer handlers
-  const handleCustomerSelect = (customer: Customer) => {
+  const handleCustomerSelect = (customer: Customer | APICustomer) => {
     setFormData(prev => ({
       ...prev,
       customerId: customer.id,
       customerName: customer.name,
       customerPhone: customer.phone,
-      customerEmail: customer.email || '',
+      customerEmail: 'email' in customer ? (customer.email || '') : '',
       customerAddress: customer.address || '',
       isNewCustomer: false,
     }));
@@ -524,7 +584,7 @@ export const QuotationForm: React.FC = () => {
 
   // Get quotation data for print/preview
   const getQuotationData = () => ({
-    quotationNumber: isEditing ? `QUO-${id}` : quotationNumber,
+    quotationNumber,
     customerName: formData.customerName,
     customerPhone: formData.customerPhone,
     customerEmail: formData.customerEmail || undefined,
@@ -551,7 +611,7 @@ export const QuotationForm: React.FC = () => {
     if (!printRef.current) return;
     const win = window.open('', '_blank');
     if (!win) return;
-    const qNum = savedQuotationIdRef.current ? 'QUO-' + savedQuotationIdRef.current : quotationNumber;
+    const qNum = quotationNumber;
     const title = downloadAsPdf ? `Quotation PDF - ${qNum}` : `Print Quotation - ${qNum}`;
     win.document.write('<html><head><title>' + title + '</title>');
     // Add print CSS with explicit color-adjust for PDF/print fidelity
@@ -1308,7 +1368,7 @@ export const QuotationForm: React.FC = () => {
                   <label className={labelClasses}>Quotation Number</label>
                   <input
                     type="text"
-                    value={isEditing ? `QUO-${id}` : quotationNumber}
+                    value={quotationNumber}
                     disabled
                     className={`${inputClasses} opacity-60 cursor-not-allowed`}
                   />
