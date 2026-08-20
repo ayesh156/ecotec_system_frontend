@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '../contexts/ThemeContext';
@@ -420,8 +420,30 @@ export const Quotations: React.FC = () => {
         )}
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className={`p-5 rounded-2xl border animate-pulse ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white border-slate-200'}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                  <div>
+                    <div className={`h-4 w-24 rounded ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                    <div className={`h-3 w-16 rounded mt-2 ${theme === 'dark' ? 'bg-slate-700/50' : 'bg-slate-100'}`} />
+                  </div>
+                </div>
+                <div className={`h-6 w-20 rounded-full ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
+              </div>
+              <div className={`h-16 rounded-xl mb-4 ${theme === 'dark' ? 'bg-slate-700/50' : 'bg-slate-100'}`} />
+              <div className={`h-12 rounded-xl ${theme === 'dark' ? 'bg-slate-700/50' : 'bg-slate-100'}`} />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Grid View */}
-      {viewMode === 'grid' && (
+      {viewMode === 'grid' && !isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {paginatedQuotations.map((q) => (
             <div key={q.id} className={`group relative overflow-hidden p-5 rounded-2xl border transition-all hover:shadow-xl ${theme === 'dark' ? 'bg-gradient-to-br from-slate-800/50 to-slate-900/50 border-slate-700/50 hover:border-emerald-500/30' : 'bg-white border-slate-200 hover:border-emerald-300 shadow-sm'}`}>
@@ -506,7 +528,7 @@ export const Quotations: React.FC = () => {
       )}
 
       {/* Table View */}
-      {viewMode === 'table' && (
+      {viewMode === 'table' && !isLoading && (
         <div className={`rounded-2xl border overflow-hidden ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700/50' : 'bg-white border-slate-200 shadow-sm'}`}>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -563,7 +585,7 @@ export const Quotations: React.FC = () => {
       )}
 
       {/* Empty State */}
-      {paginatedQuotations.length === 0 && (
+      {!isLoading && paginatedQuotations.length === 0 && (
         <div className={`flex flex-col items-center justify-center py-16 rounded-2xl ${theme === 'dark' ? 'bg-slate-800/50 border border-slate-700/50' : 'bg-white border border-slate-200'}`}>
           <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 mb-4">
             <Receipt className="w-12 h-12 text-emerald-500" />

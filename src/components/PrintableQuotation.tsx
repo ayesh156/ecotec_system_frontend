@@ -56,6 +56,9 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
     const shopLogo = branding?.logo || '/logo.png';
     const shopPhone = branding?.phone || '011-2345678 | 077-1234567';
     const shopEmail = branding?.email || 'info@ecosystem.lk';
+    const shopTagline = branding?.tagline || 'Computer Solutions';
+    const shopWebsite = branding?.website || 'www.ecosystem.lk';
+    const shopAddress = branding?.address || 'No.14, Mulatiyana junction, Mulatiyana, Matara.';
 
     const formatDate = (dateString: string) => {
       return new Date(dateString).toLocaleDateString('en-GB', {
@@ -65,13 +68,9 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
       });
     };
 
-  const formatCurrency = (amount: number) => {
-    return `LKR ${amount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}`;
-  };
-
-  const shopTagline = branding?.tagline || 'Computer Solutions';
-  const shopWebsite = branding?.website || 'www.ecosystem.lk';
-  const shopAddress = branding?.address || 'No.14, Mulatiyana junction, Mulatiyana, Matara.';
+    const formatCurrency = (amount: number) => {
+      return `LKR ${amount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}`;
+    };
 
     return (
       <div ref={ref} className="print-quotation">
@@ -167,6 +166,14 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
             font-weight: 700;
             color: #000;
             margin: 0;
+          }
+
+          .company-info .tagline {
+            font-size: 8pt;
+            font-weight: 600;
+            color: #000;
+            margin-top: 1px;
+            font-style: italic;
           }
 
           .company-info .contact {
@@ -566,17 +573,22 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
                 alt={`${shopName} ${shopSubName || ''} Logo`.trim()}
                 onError={(e) => {
                   const img = e.currentTarget;
-                  if (!img.src.endsWith('/logo.png')) {
+                  if (!hasCustomLogo && !img.src.endsWith('/logo.png')) {
                     img.src = '/logo.png';
                   } else {
                     img.style.display = 'none';
                   }
                 }}
               />
+              {!hasCustomLogo && (
+                <Building2 className="w-8 h-8 text-slate-400" style={{ display: hasCustomLogo ? 'none' : 'block' }} />
+              )}
             </div>
             <div className="company-info">
               <h1>{shopName}{shopSubName && ` ${shopSubName}`}</h1>
+              {shopTagline && <div className="tagline">{shopTagline}</div>}
               <div className="contact">Tel: {shopPhone} | Email: {shopEmail}</div>
+              {shopAddress && <div className="contact">{shopAddress}</div>}
             </div>
           </div>
           <div className="quotation-number-box">
@@ -740,9 +752,9 @@ export const PrintableQuotation = forwardRef<HTMLDivElement, PrintableQuotationP
 
         {/* Footer */}
         <div className="quotation-footer">
-          <div className="footer-message">Thank you for your interest in Eco System!</div>
+          <div className="footer-message">Thank you for your interest in {shopName}!</div>
           <div className="footer-contact">
-            No. 123, Galle Road, Colombo 03 | www.ecosystem.lk
+            {shopAddress || 'No. 123, Galle Road, Colombo 03'} | {shopWebsite || 'www.ecosystem.lk'}
           </div>
           <div className="footer-disclaimer">
             This quotation is valid for the period mentioned above. Prices and availability are subject to change. 

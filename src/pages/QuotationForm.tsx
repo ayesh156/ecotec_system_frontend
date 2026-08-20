@@ -552,10 +552,15 @@ export const QuotationForm: React.FC = () => {
     const win = window.open('', '_blank');
     if (!win) return;
     const qNum = savedQuotationIdRef.current ? 'QUO-' + savedQuotationIdRef.current : quotationNumber;
-    win.document.write('<html><head><title>Quotation - ' + qNum + '</title></head><body>');
+    const title = downloadAsPdf ? `Quotation PDF - ${qNum}` : `Print Quotation - ${qNum}`;
+    win.document.write('<html><head><title>' + title + '</title>');
+    // Add print CSS with explicit color-adjust for PDF/print fidelity
+    win.document.write('<style>@media print { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }</style>');
+    win.document.write('</head><body>');
     win.document.write(printRef.current.innerHTML);
     win.document.write('</body></html>');
     win.document.close();
+    // For PDF export we still use the browser's "Save as PDF" print dialog
     setTimeout(() => { win.print(); win.close(); }, 350);
   };
 
@@ -735,11 +740,14 @@ export const QuotationForm: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => handleSubmit('draft')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium shadow-lg hover:shadow-emerald-500/25 transition-all"
+            disabled={isSaving}
+            className={`flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium shadow-lg hover:shadow-emerald-500/25 transition-all ${
+              isSaving ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
             aria-label={isEditing ? 'Update quotation' : 'Save quotation'}
           >
             <Save className="w-5 h-5" />
-            {isEditing ? 'Update' : 'Save'}
+            {isSaving ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
           </button>
         </div>
       </div>
