@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useTheme } from '../contexts/ThemeContext';
 import { mockCustomers, mockProducts, mockQuotations } from '../data/mockData';
 import type { Customer, Product } from '../data/mockData';
+import { quotationService } from '../services/quotationService';
 import { PrintableQuotation } from '../components/PrintableQuotation';
 import {
   ArrowLeft, Save, Printer, User, Phone, Mail, MapPin,
@@ -452,33 +454,45 @@ export const QuotationForm: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (status: QuotationStatus = 'draft') => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (status: QuotationStatus = 'draft') => {
     if (!validateForm()) return;
-
-    const quotation = {
-      id: isEditing ? id : Date.now().toString(),
-      quotationNumber: isEditing ? `QUO-${id}` : quotationNumber,
-      customerId: formData.customerId || undefined,
-      customerName: formData.customerName,
-      customerPhone: formData.customerPhone,
-      customerEmail: formData.customerEmail || undefined,
-      customerAddress: formData.customerAddress || undefined,
-      date: formData.quotationDate,
-      expiryDate: formData.expiryDate,
-      items: formData.items,
-      subtotal: formData.subtotal,
-      discount: formData.discountAmount,
-      tax: formData.taxAmount,
-      total: formData.total,
-      status,
-      notes: formData.notes || undefined,
-      terms: formData.terms || undefined,
-      internalNotes: formData.internalNotes || undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    console.log('Saving Quotation:', quotation);
-    navigate('/quotations');
+    setIsSaving(true);
+    try {
+      const apiStatus: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'CONVERTED' =
+        status === 'sent' ? 'SENT' : status === 'accepted' ? 'ACCEPTED' : status === 'rejected' ? 'REJECTED' : 'DRAFT';
+      const payload = {
+        customerId: formData.customerId || '',
+        items: formData.items.map(item => ({
+          itemType: 'PRODUCT' as const,
+          ...(item.productId ? { productId: item.productId } : {}),
+          description: item.productName || item.description || 'Custom item',
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount || 0,
+        })),
+        status: apiStatus,
+        discountTotal: formData.discountAmount,
+        taxTotal: formData.taxAmount,
+        validityDate: formData.expiryDate,
+        notes: formData.notes || undefined,
+        terms: formData.terms || undefined,
+      };
+      if (isEditing && id) {
+        await quotationService.update(id, payload);
+        toast.success('Quotation updated successfully');
+      } else {
+        await quotationService.create(payload);
+        toast.success('Quotation created successfully');
+      }
+      navigate('/system/quotations');
+    } catch (error) {
+      console.error('Failed to save quotation:', error);
+      toast.error('Failed to save quotation');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Get quotation data for print/preview
@@ -662,7 +676,7 @@ export const QuotationForm: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/quotations')}
+            onClick={() => navigate('/system/quotations')}
             className={`p-2 rounded-xl border transition-all ${
               theme === 'dark'
                 ? 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/50 text-slate-400'

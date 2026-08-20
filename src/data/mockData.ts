@@ -5619,6 +5619,7 @@ export interface QuotationActivity {
 // Quotation Interface - Enhanced for world-class features
 export interface Quotation {
   id: string;
+  apiId?: string; // Actual database UUID for API operations
   quotationNumber: string;
   referenceNumber?: string;
   // Customer Info

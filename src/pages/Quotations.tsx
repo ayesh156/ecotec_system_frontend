@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useTheme } from '../contexts/ThemeContext';
-import { mockQuotations } from '../data/mockData';
+import { quotationService, convertAPIQuotationToFrontend } from '../services/quotationService';
 import type { Quotation, QuotationStatus } from '../data/mockData';
 import { DeleteConfirmationModal } from '../components/modals/DeleteConfirmationModal';
 import { SearchableSelect } from '../components/ui/searchable-select';
@@ -31,7 +32,8 @@ const statusConfig: Record<QuotationStatus, { label: string; color: string; bgCo
 export const Quotations: React.FC = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
-  const [quotations, setQuotations] = useState<Quotation[]>(mockQuotations);
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
@@ -56,6 +58,24 @@ export const Quotations: React.FC = () => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch quotations from backend API
+  useEffect(() => {
+    const fetchQuotations = async () => {
+      setIsLoading(true);
+      try {
+        const result = await quotationService.getAll({ limit: 100 });
+        const converted = result.quotations.map(convertAPIQuotationToFrontend);
+        setQuotations(converted);
+      } catch (error) {
+        console.error('Failed to fetch quotations:', error);
+        toast.error('Failed to load quotations');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchQuotations();
   }, []);
 
   // Filtered quotations
@@ -167,12 +187,26 @@ export const Quotations: React.FC = () => {
     );
   };
 
-  // Action handlers
-  const handleView = (q: Quotation) => navigate(`/quotations/edit/${q.id}`, { state: { viewMode: true } });
-  const handleEdit = (q: Quotation) => navigate(`/quotations/edit/${q.id}`);
-  const handleDuplicate = (q: Quotation) => navigate('/quotations/create', { state: { duplicateFrom: q } });
+  // Action handlers — always use /system/* scoped paths
+  const handleView = (q: Quotation) => navigate(`/system/quotations/edit/${q.id}`, { state: { viewMode: true } });
+  const handleEdit = (q: Quotation) => navigate(`/system/quotations/edit/${q.id}`);
+  const handleDuplicate = (q: Quotation) => navigate('/system/quotations/create', { state: { duplicateFrom: q } });
   const handleDelete = (q: Quotation) => { setQuotationToDelete(q); setIsDeleteModalOpen(true); };
-  const confirmDelete = () => { if (quotationToDelete) { setQuotations(prev => prev.filter(q => q.id !== quotationToDelete.id)); setIsDeleteModalOpen(false); setQuotationToDelete(null); } };
+  const confirmDelete = async () => {
+    if (quotationToDelete) {
+      try {
+        const apiId = quotationToDelete.apiId || quotationToDelete.id;
+        await quotationService.delete(apiId);
+        setQuotations(prev => prev.filter(q => q.id !== quotationToDelete.id));
+        toast.success(`Quotation ${quotationToDelete.quotationNumber} deleted`);
+      } catch (error) {
+        console.error('Failed to delete quotation:', error);
+        toast.error('Failed to delete quotation');
+      }
+      setIsDeleteModalOpen(false);
+      setQuotationToDelete(null);
+    }
+  };
   
   // WhatsApp share
   const handleWhatsAppShare = (q: Quotation) => {
@@ -214,7 +248,7 @@ export const Quotations: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/quotations/create')} className="relative group flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-teal-500 text-white rounded-xl font-medium shadow-lg hover:shadow-emerald-500/30 hover:scale-[1.02] transition-all overflow-hidden">
+          <button onClick={() => navigate('/system/quotations/create')} className="relative group flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-teal-500 text-white rounded-xl font-medium shadow-lg hover:shadow-emerald-500/30 hover:scale-[1.02] transition-all overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500 via-teal-500 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <Plus className="w-5 h-5 relative z-10" />
             <span className="relative z-10">Create Quotation</span>
@@ -543,7 +577,7 @@ export const Quotations: React.FC = () => {
               <RefreshCw className="w-4 h-4" /> Clear Filters
             </button>
           ) : (
-            <button onClick={() => navigate('/quotations/create')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium">
+            <button onClick={() => navigate('/system/quotations/create')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium">
               <Plus className="w-4 h-4" /> Create Quotation
             </button>
           )}
