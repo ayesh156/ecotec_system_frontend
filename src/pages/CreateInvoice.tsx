@@ -491,7 +491,7 @@ export const CreateInvoice: React.FC = () => {
   };
 
   // Calculations
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.total) || (Number(item.quantity) * Number(item.unitPrice))), 0);
   const discountAmount = discountType === 'percentage' 
     ? subtotal * (discount / 100) 
     : discountType === 'fixed' ? discount : 0;
@@ -502,10 +502,34 @@ export const CreateInvoice: React.FC = () => {
   // State for API submission
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Generate invoice number (8-digit format)
-  const generateInvoiceNumber = () => {
-    return Date.now().toString().slice(-8);
-  };
+  // 🔒 LOCKED invoice number: fetched once from /next-number on mount (if available),
+  // then held in state so it never regenerates on re-renders or during save.
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+
+  // Fetch the next invoice number ONCE on mount and lock it.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchNextInvoiceNumber = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'}/invoices/next-number`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken') || ''}`,
+          },
+        });
+        if (!res.ok) return;
+        const body = await res.json();
+        const number = body?.data?.number;
+        if (!cancelled && number && /^\d{10}$/.test(number)) {
+          setInvoiceNumber(number);
+        }
+      } catch {
+        // Silent fallback: backend will generate a server-side number if none is sent.
+      }
+    };
+    fetchNextInvoiceNumber();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleCreateInvoice = async () => {
     if ((!selectedCustomer && !isWalkIn) || items.length === 0) return;
@@ -518,8 +542,9 @@ export const CreateInvoice: React.FC = () => {
 
     // Try to create via API first
     try {
-      // Prepare invoice data
+      // Prepare invoice data — pass the locked 10-digit number exactly as displayed
       const invoiceData = {
+        ...(invoiceNumber ? { invoiceNumber } : {}),
         customerId: customerId || undefined, // undefined for walk-in (omit from request)
         items: items.map(item => ({
           productId: item.productId || undefined, // undefined for quick-add items
@@ -591,7 +616,7 @@ export const CreateInvoice: React.FC = () => {
 
     // Local invoice creation (fallback or for walk-in customers)
     const invoice: Invoice & { buyingDate: string } = {
-      id: generateInvoiceNumber(),
+      id: invoiceNumber || String(Date.now()).slice(-8),
       customerId: customerId || 'walk-in', // Use 'walk-in' for local storage
       customerName,
       items: items.map(item => ({

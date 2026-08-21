@@ -72,11 +72,8 @@ const getDefaultExpiryDate = (days: number = 30) => {
   return date.toISOString().split('T')[0];
 };
 
-const generateQuotationNumber = () => {
-  const year = new Date().getFullYear();
-  const random = Math.floor(Math.random() * 9000) + 1000;
-  return `QUO-${year}-${random}`;
-};
+// Empty until hydrated from /quotations/next-number on mount
+const generateQuotationNumber = () => '';
 
 // Lightweight customer shape used for the selected-customer card
 interface SelectedCustomer {
@@ -333,6 +330,15 @@ export const QuotationForm: React.FC = () => {
   const isLoadingCacheCustomers = isLoadingCustomers;
   const isLoadingCacheProducts = isLoadingProducts;
 
+  // Hydrate a fresh 10-digit quotation number from the server on create-mode mount
+  useEffect(() => {
+    if (!isEditing && !isDuplicating) {
+      quotationService.getNextNumber()
+        .then((num) => setQuotationNumber(num))
+        .catch((error) => console.error('Failed to fetch next quotation number:', error));
+    }
+  }, [isEditing, isDuplicating]);
+
   // Load quotation data when editing or duplicating
   useEffect(() => {
     // Handle duplicate mode - copy data from the quotation passed via route state
@@ -340,7 +346,9 @@ export const QuotationForm: React.FC = () => {
       const duplicateQuotation = locationState.duplicateFrom;
       if (duplicateQuotation) {
         setIsLoadingQuotation(true);
-        setQuotationNumber(generateQuotationNumber());
+        quotationService.getNextNumber()
+          .then((num) => setQuotationNumber(num))
+          .catch(() => {});
         setFormData({
           customerId: duplicateQuotation.customerId || '',
           customerName: duplicateQuotation.customerName,
@@ -678,6 +686,7 @@ export const QuotationForm: React.FC = () => {
 
     return {
       customerId: customerIdOverride || formData.customerId || '',
+      quotationNumber,
       items: formData.items.map(item => ({
         itemType: 'PRODUCT' as const,
         ...(item.productId && item.productId !== '0' ? { productId: item.productId } : {}),

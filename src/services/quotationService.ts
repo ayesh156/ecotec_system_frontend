@@ -135,7 +135,16 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
 // Quotation Service API Functions
 // ===================================
 
+export const getNextQuotationNumber = async (): Promise<string> => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/quotations/next-number`, { headers: getAuthHeaders() });
+  const result = await handleResponse<APIResponse<{ number: string }>>(response);
+  return result.data.number;
+};
+
 export const quotationService = {
+  async getNextNumber(): Promise<string> {
+    return getNextQuotationNumber();
+  },
   /**
    * Get all quotations with optional filtering and pagination
    */

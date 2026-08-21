@@ -70,12 +70,6 @@ const getDefaultExpiryDate = (days: number = 30) => {
   return date.toISOString().split('T')[0];
 };
 
-const generateEstimateNumber = () => {
-  const year = new Date().getFullYear();
-  const random = Math.floor(Math.random() * 9000) + 1000;
-  return `EST-${year}-${random}`;
-};
-
 // Initial Form Data
 const initialFormData: FormData = {
   customerId: '',
@@ -128,8 +122,21 @@ export const EstimateForm: React.FC = () => {
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [estimateNumber] = useState(generateEstimateNumber());
+  const [estimateNumber, setEstimateNumber] = useState('');
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
+
+  // Fetch the authoritative 10-digit next estimate number on mount (create mode only)
+  useEffect(() => {
+    if (isEditing || isDuplicating) return;
+    let cancelled = false;
+    estimateService.getNextNumber()
+      .then((num) => { if (!cancelled) setEstimateNumber(num); })
+      .catch((err) => {
+        console.error('Failed to fetch next estimate number:', err);
+        if (!cancelled) setEstimateNumber('');
+      });
+    return () => { cancelled = true; };
+  }, [isEditing, isDuplicating]);
   
   // Customer Search
   const [customerSearch, setCustomerSearch] = useState('');
@@ -583,6 +590,9 @@ export const EstimateForm: React.FC = () => {
     const taxAmount = sanitizeNum(formData.taxAmount);
 
     return {
+      // Send the fetched authoritative 10-digit number on create; omit on edit so the backend
+      // keeps the existing number (assignment is handled by getNextNumber on mount only).
+      ...(!isEditing ? { estimateNumber: estimateNumber } : {}),
       customerId: (customerIdOverride || formData.customerId || '').trim(),
       items: formData.items.map(item => ({
         itemType: 'PRODUCT' as const,
@@ -654,7 +664,7 @@ export const EstimateForm: React.FC = () => {
   // Get estimate data for print/preview
   const getEstimateData = () => {
     const rawNumber = isEditing ? `${id}` : estimateNumber;
-    const cleanedNumber = rawNumber.startsWith('EST-') ? rawNumber : `EST-${rawNumber}`;
+    const cleanedNumber = rawNumber.startsWith('EST-') ? rawNumber.replace(/^EST-/, '') : rawNumber;
     return {
       ...{
         estimateNumber: cleanedNumber,
@@ -686,7 +696,7 @@ export const EstimateForm: React.FC = () => {
     if (!printRef.current) return;
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write('<html><head><title>Estimate - ' + (isEditing ? `EST-${id}` : estimateNumber) + '</title>');
+    win.document.write('<html><head><title>Estimate - ' + (isEditing ? `${id}` : estimateNumber) + '</title>');
     win.document.write('<style>@media print { @page { size: A4 portrait; margin: 0; } }</style>');
     win.document.write('</head><body>');
     win.document.write(printRef.current.innerHTML);
@@ -1445,7 +1455,7 @@ export const EstimateForm: React.FC = () => {
                   <label className={labelClasses}>Estimate Number</label>
                   <input
                     type="text"
-                    value={isEditing ? `EST-${id}` : estimateNumber}
+                    value={isEditing ? `${id}` : estimateNumber}
                     disabled
                     className={`${inputClasses} opacity-60 cursor-not-allowed`}
                   />

@@ -197,9 +197,10 @@ export const estimateService = {
     const response = await fetchWithAuth(url, { headers: getAuthHeaders() });
     const result = await handleResponse<APIResponse<APIEstimate[]>>(response);
 
+    const estimates = Array.isArray(result?.data) ? result.data : [];
     return {
-      estimates: result.data,
-      pagination: result.pagination || { page: 1, limit: 10, total: result.data.length, totalPages: 1 },
+      estimates,
+      pagination: result?.pagination || { page: 1, limit: 10, total: estimates.length, totalPages: 1 },
     };
   },
 
@@ -280,6 +281,15 @@ export const estimateService = {
     const response = await fetchWithAuth(`${API_BASE_URL}/estimates/stats`, { headers: getAuthHeaders() });
     const result = await handleResponse<APIResponse<EstimateStats>>(response);
     return result.data;
+  },
+
+  /**
+   * Get the next estimate number (10-digit numeric string)
+   */
+  async getNextNumber(): Promise<string> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/estimates/next-number`, { headers: getAuthHeaders() });
+    const result = await handleResponse<APIResponse<{ number: string }>>(response);
+    return result.data.number;
   },
 };
 

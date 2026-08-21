@@ -117,6 +117,7 @@ export interface GetInvoicesParams {
 }
 
 export interface CreateInvoiceData {
+  invoiceNumber?: string; // 10-digit number displayed at creation; preserved exactly on save
   customerId?: string; // Optional for walk-in customers
   items: {
     productId?: string; // Optional for quick-add items
