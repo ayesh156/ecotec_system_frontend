@@ -5,7 +5,6 @@ import { useTaxSettings } from '../contexts/TaxSettingsContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 import { useShopBranding } from '../contexts/ShopBrandingContext';
 import { toast } from 'sonner';
-import { mockInvoices } from '../data/mockData';
 import type { Customer, Product, Invoice, InvoiceItem } from '../data/mockData';
 import PrintableInvoice from '../components/PrintableInvoice';
 import { SearchableSelect } from '../components/ui/searchable-select';
@@ -616,9 +615,6 @@ export const CreateInvoice: React.FC = () => {
       salesChannel,
     };
 
-    // Add to mockInvoices
-    mockInvoices.unshift(invoice);
-    
     // Update product stock - decrease stock for sold items
     items.forEach(item => {
       const productIndex = products.findIndex((p: Product) => p.id === item.productId);
