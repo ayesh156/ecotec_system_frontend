@@ -129,6 +129,25 @@ export const ALL_SECTIONS: SectionConfig[] = [
     icon: '📊',
   },
   {
+    path: '/productivity',
+    label: 'Productivity',
+    description: 'Notes and calendar productivity tools',
+    relatedPaths: ['/notes', '/calendar'],
+    icon: '💡',
+  },
+  {
+    path: '/technicians',
+    label: 'Technicians',
+    description: 'Technician management under Job Notes',
+    icon: '🔧',
+  },
+  {
+    path: '/users',
+    label: 'Users',
+    description: 'Shop user management',
+    icon: '👤',
+  },
+  {
     path: '/pricing-proposals',
     label: 'Pricing Proposals',
     description: 'Pricing proposals and templates',
@@ -199,9 +218,31 @@ const ShopSectionsContext = createContext<ShopSectionsContextType | undefined>(u
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
+// Normalize a route path so section keys (e.g. `/invoices` or `job-notes`)
+// reliably match sidebar hrefs (e.g. `/system/job-notes`). Strips `/system`
+// prefix, leading slashes, and lowercases/trims for case-insensitivity.
+export const normalizePath = (path: string): string => {
+  if (!path) return path;
+  let p = path;
+  // Strip leading `/system` prefix (case-insensitive)
+  if (p.toLowerCase().startsWith('/system')) {
+    p = p.slice('/system'.length) || '/';
+  }
+  return p.replace(/^\//, '').toLowerCase().trim();
+};
+
 export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, getAccessToken } = useAuth();
-  const [hiddenSections, setHiddenSections] = useState<string[]>([]);
+
+  // Hydrate hiddenSections directly from localStorage on mount for zero-delay
+  // persistence across page refreshes (F5). Falls back to empty array safely.
+  const [hiddenSections, setHiddenSections] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ecotec_hidden_sections') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [adminHiddenSections, setAdminHiddenSections] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true); // Start with loading true to prevent flash
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -210,13 +251,11 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Get effective shop ID from the user's shop
   const effectiveShopId = user?.shop?.id;
 
-  // Fetch hidden sections from API
+  // Fetch hidden sections from API (with localStorage fast-path for offline/reliability)
   const fetchHiddenSections = useCallback(async (forceRefresh = false) => {
     const token = getAccessToken();
-    console.log('🔍 Fetching hidden sections for shop:', effectiveShopId, 'token:', token ? 'present' : 'missing', 'forceRefresh:', forceRefresh);
     
     if (!effectiveShopId || !token) {
-      console.log('⏭️ Skipping fetch - no shop or token');
       setHiddenSections([]);
       setAdminHiddenSections([]);
       setIsLoading(false);
@@ -226,16 +265,25 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     // Skip if we already fetched for this shop (unless forcing refresh)
     if (!forceRefresh && hasInitialized && lastFetchedShopId === effectiveShopId) {
-      console.log('⏭️ Already fetched for this shop, skipping');
       return;
     }
 
     setIsLoading(true);
+
+    // Fast-path: hydrate from localStorage immediately so sidebar is correct
+    // even before the network resolves (keeps Section Control synced reactively).
+    try {
+      const cachedHidden = localStorage.getItem(`shop_hidden_sections_${effectiveShopId}`);
+      const cachedAdminHidden = localStorage.getItem(`shop_admin_hidden_sections_${effectiveShopId}`);
+      if (cachedHidden) setHiddenSections(JSON.parse(cachedHidden));
+      if (cachedAdminHidden) setAdminHiddenSections(JSON.parse(cachedAdminHidden));
+    } catch {
+      // Ignore malformed cache
+    }
+
     try {
       // Use standard shop fetch endpoint which includes full shop details
       const url = `${API_BASE_URL}/shops/current/sections`;
-      console.log('📡 [ShopSections] API_BASE_URL:', API_BASE_URL);
-      console.log('📡 [ShopSections] Fetching sections from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -248,26 +296,43 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       if (response.ok) {
         const responseData = await response.json();
-        const data = responseData.data; // Shop object is in .data
-        console.log('📦 [ShopSections] API Response shop.id:', data.id);
-        console.log('📦 [ShopSections] API Response shop.name:', data.name);
-        console.log('📦 [ShopSections] hiddenSections:', data.hiddenSections);
-        console.log('📦 [ShopSections] hiddenSections count:', data.hiddenSections?.length || 0);
-        console.log('📦 [ShopSections] adminHiddenSections:', data.adminHiddenSections);
-        console.log('📦 [ShopSections] adminHiddenSections count:', data.adminHiddenSections?.length || 0);
-        setHiddenSections(data.hiddenSections || []);
-        setAdminHiddenSections(data.adminHiddenSections || []);
+        // Safe fallback chaining: tolerate any shape (nested .data, flat, settings) and undefined.
+        const hidden =
+          responseData?.data?.hiddenSections ??
+          responseData?.hiddenSections ??
+          responseData?.data?.settings?.hiddenSections ??
+          responseData?.settings?.hiddenSections ??
+          [];
+        const adminHidden =
+          responseData?.data?.adminHiddenSections ??
+          responseData?.adminHiddenSections ??
+          responseData?.data?.settings?.adminHiddenSections ??
+          responseData?.settings?.adminHiddenSections ??
+          [];
+        setHiddenSections(hidden);
+        setAdminHiddenSections(adminHidden);
+        // Persist fetched values to localStorage (global + shop-scoped keys)
+        localStorage.setItem('ecotec_hidden_sections', JSON.stringify(hidden));
+        localStorage.setItem(`shop_hidden_sections_${effectiveShopId}`, JSON.stringify(hidden));
+        localStorage.setItem(`shop_admin_hidden_sections_${effectiveShopId}`, JSON.stringify(adminHidden));
         setLastFetchedShopId(effectiveShopId);
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.warn('⚠️ [ShopSections] Failed to fetch - Status:', response.status, 'Error:', errorData);
-        setHiddenSections([]);
-        setAdminHiddenSections([]);
+        // Fallback safely to localStorage instead of wiping to empty arrays.
+        setHiddenSections(JSON.parse(localStorage.getItem('ecotec_hidden_sections') || '[]'));
+        setAdminHiddenSections(JSON.parse(localStorage.getItem(`shop_admin_hidden_sections_${effectiveShopId}`) || '[]'));
       }
     } catch (error) {
       console.warn('⚠️ Error fetching hidden sections:', error);
-      setHiddenSections([]);
-      setAdminHiddenSections([]);
+      // Fallback safely to localStorage without throwing an uncaught error.
+      try {
+        setHiddenSections(JSON.parse(localStorage.getItem('ecotec_hidden_sections') || '[]'));
+        setAdminHiddenSections(JSON.parse(localStorage.getItem(`shop_admin_hidden_sections_${effectiveShopId}`) || '[]'));
+      } catch {
+        setHiddenSections([]);
+        setAdminHiddenSections([]);
+      }
     } finally {
       setIsLoading(false);
       setHasInitialized(true);
@@ -276,7 +341,6 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Load sections when shop changes - use effectiveShopId directly to trigger re-fetch
   useEffect(() => {
-    console.log('🔄 Shop changed, fetching sections. effectiveShopId:', effectiveShopId, 'lastFetchedShopId:', lastFetchedShopId);
     // Force refresh if shop changed
     if (effectiveShopId && effectiveShopId !== lastFetchedShopId) {
       fetchHiddenSections(true);
@@ -291,16 +355,22 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, [effectiveShopId, lastFetchedShopId, hasInitialized, fetchHiddenSections]);
 
-  // Helper to check if path matches any in a list (including related paths)
+  // Helper to check if path matches any in a list (including related paths).
+  // Normalizes paths (strips `/system` prefix) so sidebar hrefs (`/system/invoices`)
+  // reliably match section keys (`/invoices`).
   const isPathInList = useCallback((path: string, list: string[]): boolean => {
+    const normalizedPath = normalizePath(path);
+    const normalizedList = list.map(normalizePath);
+
     // Direct match
-    if (list.includes(path)) {
+    if (normalizedList.includes(normalizedPath)) {
       return true;
     }
 
-    // Check if path starts with a hidden section
-    for (const hiddenPath of list) {
-      if (path.startsWith(hiddenPath + '/')) {
+    // Check if path starts with a hidden section (boundary-safe: avoids
+    // `/products` matching `/productivity`)
+    for (const hiddenPath of normalizedList) {
+      if (hiddenPath !== '' && normalizedPath.startsWith(hiddenPath + '/')) {
         return true;
       }
     }
@@ -308,7 +378,8 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     // Check related paths
     for (const section of ALL_SECTIONS) {
       if (list.includes(section.path)) {
-        if (section.relatedPaths?.some(rp => path === rp || path.startsWith(rp + '/'))) {
+        const relatedList = (section.relatedPaths || []).map(normalizePath);
+        if (relatedList.some(rp => normalizedPath === rp || normalizedPath.startsWith(rp + '/'))) {
           return true;
         }
       }
@@ -327,26 +398,34 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     return isPathInList(path, adminHiddenSections);
   }, [adminHiddenSections, isPathInList]);
 
-  // Check if a path is hidden for the CURRENT USER based on their role
+  // Check if a path is hidden for the CURRENT USER.
+  // Both SuperAdmin-hidden and Admin-hidden sections apply universally to ALL
+  // shop users (ADMIN, MANAGER, and regular USER) - no role bypass.
   const isSectionHidden = useCallback((path: string): boolean => {
-    // SuperAdmin: See everything, nothing is hidden
-    if (user?.role === 'SUPER_ADMIN') {
+    // Dashboard (`/` or `/system`, incl. `/system/dashboard`) must ALWAYS be
+    // visible as the root fallback route. Hiding it would trigger a redirect
+    // loop between the router and AdminLayout, trapping users on an infinite
+    // spinner. This guard overrides both hidden lists.
+    const normalized = normalizePath(path);
+    if (normalized === '' || normalized === 'dashboard') {
+      return false;
+    }
+
+    // SuperAdmins viewing the ecosystem (no shop) see their own nav untouched,
+    // but shop users (ADMIN/MANAGER/STAFF) always respect both hidden lists.
+    if (user?.role === 'SUPER_ADMIN' && !user?.shop) {
       return false;
     }
     
-    // Shop ADMIN: Only SuperAdmin hidden sections are hidden
-    if (user?.role === 'ADMIN') {
-      return isSuperAdminHidden(path);
-    }
-    
-    // Regular USER: Both SuperAdmin AND Admin hidden sections are hidden
+    // Both SuperAdmin and Shop Admin hidden lists must apply universally
     return isSuperAdminHidden(path) || isAdminHidden(path);
-  }, [user?.role, isSuperAdminHidden, isAdminHidden]);
+  }, [user?.role, user?.shop, isSuperAdminHidden, isAdminHidden]);
 
-  // Update hidden sections (Super Admin only - affects ADMIN + USER)
+  // Update hidden sections (Super Admin only - affects ADMIN + USER).
+  // Persists to localStorage + state immediately for instant reactive sidebar sync,
+  // then dispatches the backend settings update.
   const updateHiddenSections = useCallback(async (sections: string[]): Promise<void> => {
     const token = getAccessToken();
-    console.log('🔧 Updating SuperAdmin sections. ShopId:', effectiveShopId, 'Sections:', sections);
     
     if (!effectiveShopId || !token) {
       throw new Error('No shop selected');
@@ -356,41 +435,43 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       throw new Error('Only Super Admin can update section visibility');
     }
 
-    setIsLoading(true);
-    try {
-      // Use dedicated sections endpoint with proper authorization
-      const url = `${API_BASE_URL}/shops/current/sections`;
-      console.log('📡 Updating SuperAdmin sections via:', url);
-      
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ hiddenSections: sections }),
-      });
+    // 1. Instantly update global state + persist to localStorage (reactive sidebar sync)
+    setHiddenSections(sections);
+    localStorage.setItem('ecotec_hidden_sections', JSON.stringify(sections));
+    localStorage.setItem(`shop_hidden_sections_${effectiveShopId}`, JSON.stringify(sections));
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('❌ Failed to update sections:', error);
-        throw new Error(error.message || error.error || 'Failed to update sections');
-      }
+    // 2. Dispatch backend persistence (fire and await for error reporting)
+    const url = `${API_BASE_URL}/shops/current/sections`;
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hiddenSections: sections }),
+    });
 
-      // Dedicated endpoint returns sections directly, not in .data wrapper
-      const responseData = await response.json();
-      
-      console.log('✅ Updated SuperAdmin hidden sections. New state:', responseData.hiddenSections);
-      setHiddenSections(responseData.hiddenSections || []);
-    } finally {
-      setIsLoading(false);
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('❌ Failed to update sections:', error);
+      throw new Error(error.message || error.error || 'Failed to update sections');
+    }
+
+    // Sync authoritative server response (backend wraps in `data`)
+    const responseData = await response.json();
+    const syncedHidden = responseData?.data?.hiddenSections ?? responseData?.hiddenSections;
+    if (Array.isArray(syncedHidden)) {
+      setHiddenSections(syncedHidden);
+      localStorage.setItem('ecotec_hidden_sections', JSON.stringify(syncedHidden));
+      localStorage.setItem(`shop_hidden_sections_${effectiveShopId}`, JSON.stringify(syncedHidden));
     }
   }, [effectiveShopId, getAccessToken, user?.role]);
 
-  // Update admin hidden sections (Shop ADMIN - affects USER only)
+  // Update admin hidden sections (Shop ADMIN - affects USER only).
+  // Persists to localStorage + state immediately for instant reactive sidebar sync.
   const updateAdminHiddenSections = useCallback(async (sections: string[]): Promise<void> => {
     const token = getAccessToken();
-    console.log('🔧 Updating Admin sections. ShopId:', effectiveShopId, 'Sections:', sections);
     
     if (!effectiveShopId || !token) {
       throw new Error('No shop selected');
@@ -400,34 +481,34 @@ export const ShopSectionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       throw new Error('Only Shop Admin can update user section visibility');
     }
 
-    setIsLoading(true);
-    try {
-      // Use dedicated sections endpoint with proper authorization
-      const url = `${API_BASE_URL}/shops/current/sections`;
-      console.log('📡 Updating Admin sections via:', url);
+    // 1. Instantly update global state + persist to localStorage (reactive sidebar sync)
+    setAdminHiddenSections(sections);
+    localStorage.setItem(`shop_admin_hidden_sections_${effectiveShopId}`, JSON.stringify(sections));
 
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ adminHiddenSections: sections }),
-      });
+    // 2. Dispatch backend persistence
+    const url = `${API_BASE_URL}/shops/current/sections`;
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('❌ Failed to update admin sections:', error);
-        throw new Error(error.message || error.error || 'Failed to update admin sections');
-      }
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ adminHiddenSections: sections }),
+    });
 
-      // Dedicated endpoint returns sections directly, not in .data wrapper
-      const responseData = await response.json();
-      
-      console.log('✅ Updated Admin hidden sections. New state:', responseData.adminHiddenSections);
-      setAdminHiddenSections(responseData.adminHiddenSections || []);
-    } finally {
-      setIsLoading(false);
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('❌ Failed to update admin sections:', error);
+      throw new Error(error.message || error.error || 'Failed to update admin sections');
+    }
+
+    // Sync authoritative server response (backend wraps in `data`)
+    const responseData = await response.json();
+    const syncedAdminHidden = responseData?.data?.adminHiddenSections ?? responseData?.adminHiddenSections;
+    if (Array.isArray(syncedAdminHidden)) {
+      setAdminHiddenSections(syncedAdminHidden);
+      localStorage.setItem(`shop_admin_hidden_sections_${effectiveShopId}`, JSON.stringify(syncedAdminHidden));
     }
   }, [effectiveShopId, getAccessToken, user?.role]);
 

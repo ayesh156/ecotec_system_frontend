@@ -25,7 +25,7 @@ export const Dashboard: React.FC = () => {
   // Redirect SUPER_ADMIN to admin dashboard (only if not viewing a shop)
   useEffect(() => {
     if (user?.role === 'SUPER_ADMIN') {
-      navigate('/admin', { replace: true });
+      navigate('/system/shop-admin', { replace: true });
     }
   }, [user, navigate]);
 
@@ -373,7 +373,7 @@ export const Dashboard: React.FC = () => {
               Invoice Summary
             </h3>
             <Link 
-              to="/invoices" 
+              to="/system/invoices" 
               className="flex items-center gap-1 text-xs sm:text-sm text-emerald-500 hover:text-emerald-400 transition-colors"
             >
               View all <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -422,7 +422,7 @@ export const Dashboard: React.FC = () => {
               Top Products
             </h3>
             <Link 
-              to="/products" 
+              to="/system/products" 
               className="flex items-center gap-1 text-xs sm:text-sm text-emerald-500 hover:text-emerald-400 transition-colors"
             >
               View all <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

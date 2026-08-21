@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'sonner';
-import { fetchWithAuth, handleAuthResponse, getAuthHeaders } from '../lib/fetchWithAuth';
 import { estimateService, convertAPIEstimateToFrontend, type CreateEstimateData } from '../services/estimateService';
-import type { FrontendEstimate, FrontendEstimateItem } from '../services/estimateService';
 import type { Product } from '../data/mockData';
 import { customerService } from '../services/customerService';
+import { productService } from '../services/productService';
 import { PrintableEstimate } from '../components/PrintableEstimate';
 import {
   ArrowLeft, Save, Printer, User, Phone, Mail, MapPin,
@@ -124,6 +124,8 @@ export const EstimateForm: React.FC = () => {
   const isDuplicating = !!(location.state as any)?.duplicateFrom;
   const isViewMode = !!(location.state as any)?.viewMode;
 
+  const { customers: cachedCustomers, products: cachedProducts, loadCustomers, loadProducts, isLoadingCustomers, isLoadingProducts } = useDataCache();
+
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [estimateNumber] = useState(generateEstimateNumber());
@@ -154,52 +156,118 @@ export const EstimateForm: React.FC = () => {
   // Preview State
   const [showPreview, setShowPreview] = useState(false);
 
-  // Live customer data from backend API
-  const [customers, setCustomers] = useState<any[]>([]);
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetchWithAuth(import.meta.env.VITE_API_URL + '/customers?limit=200', { headers: getAuthHeaders() });
-        const json = await handleAuthResponse<{ data: any[] }>(res);
-        setCustomers(Array.isArray(json) ? json : (json.data || []));
-      } catch { /* silent */ }
-    };
-    load();
-  }, []);
+  // Live customer search data from backend API with debounce + instant cache filtering
+  const cacheCustomers = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase();
+    if (!q) return [];
+    return (cachedCustomers as any[]).filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q)
+    );
+  }, [cachedCustomers, customerSearch]);
 
-  // Live product data from backend API
-  const [products, setProducts] = useState<any[]>([]);
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetchWithAuth(import.meta.env.VITE_API_URL + '/products?limit=200', { headers: getAuthHeaders() });
-        const json = await handleAuthResponse<{ data: any[] }>(res);
-        setProducts(Array.isArray(json) ? json : (json.data || []));
-      } catch { /* silent */ }
-    };
-    load();
-  }, []);
+  // Live product search data from backend API with debounce + instant cache filtering
+  const cacheProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return [];
+    return (cachedProducts as any[]).filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.serialNumber || '').toLowerCase().includes(q) ||
+      (p.sku || '').toLowerCase().includes(q) ||
+      (p.barcode || '').toLowerCase().includes(q)
+    );
+  }, [cachedProducts, productSearch]);
 
-  // Filter customers for search
+  // Local state for network results (merges with cached results)
+  const [remoteCustomers, setRemoteCustomers] = useState<any[]>([]);
+  const [remoteProducts, setRemoteProducts] = useState<any[]>([]);
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const productSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced background fetch for customers - keeps previous suggestions while loading
+  useEffect(() => {
+    if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current);
+    if (!customerSearch.trim()) {
+      setRemoteCustomers([]);
+      return;
+    }
+    customerSearchTimer.current = setTimeout(async () => {
+      setIsSearchingCustomers(true);
+      try {
+        const res = await customerService.getAll({ search: customerSearch.trim(), limit: 10 });
+        const fetched = res.customers || [];
+        // Merge fetched results with cache, de-duplicate by id (cache first, then fresh API results)
+        setRemoteCustomers(fetched);
+        // If cache was empty, hydrate it with results for future instant filtering
+        if (cachedCustomers.length === 0) {
+          loadCustomers(true).catch(() => {});
+        }
+      } catch { /* silent */ }
+      finally {
+        setIsSearchingCustomers(false);
+      }
+    }, 300);
+    return () => {
+      if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current);
+    };
+  }, [customerSearch, cachedCustomers.length, loadCustomers]);
+
+  // Debounced background fetch for products - keeps previous suggestions while loading
+  useEffect(() => {
+    if (productSearchTimer.current) clearTimeout(productSearchTimer.current);
+    if (!productSearch.trim()) {
+      setRemoteProducts([]);
+      return;
+    }
+    productSearchTimer.current = setTimeout(async () => {
+      setIsSearchingProducts(true);
+      try {
+        const res = await productService.getAll({ search: productSearch.trim(), limit: 10 });
+        setRemoteProducts(res.products || []);
+        if (cachedProducts.length === 0) {
+          loadProducts(true).catch(() => {});
+        }
+      } catch { /* silent */ }
+      finally {
+        setIsSearchingProducts(false);
+      }
+    }, 300);
+    return () => {
+      if (productSearchTimer.current) clearTimeout(productSearchTimer.current);
+    };
+  }, [productSearch, cachedProducts.length, loadProducts]);
+
+  // Merge cached + remote results (cache-first, de-duplicated by id, remote overrides)
+  const mergedCustomers = useMemo(() => {
+    const map = new Map<string, any>();
+    cacheCustomers.forEach(c => map.set(c.id, c));
+    remoteCustomers.forEach(c => map.set(c.id, c));
+    return Array.from(map.values());
+  }, [cacheCustomers, remoteCustomers]);
+
+  const mergedProducts = useMemo(() => {
+    const map = new Map<string, any>();
+    cacheProducts.forEach(p => map.set(p.id, p));
+    remoteProducts.forEach(p => map.set(p.id, p));
+    return Array.from(map.values());
+  }, [cacheProducts, remoteProducts]);
+
+  // Filter customers for search dropdown
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return [];
-    const search = customerSearch.toLowerCase();
-    return customers.filter((c: any) =>
-      c.name.toLowerCase().includes(search) ||
-      c.phone.includes(search) ||
-      c.email?.toLowerCase().includes(search)
-    ).slice(0, 5);
-  }, [customerSearch, customers]);
+    return mergedCustomers.slice(0, 5);
+  }, [mergedCustomers]);
 
-  // Filter products for search
+  // Filter products for search dropdown
   const filteredProducts = useMemo(() => {
-    if (!productSearch) return [];
-    const search = productSearch.toLowerCase();
-    return products.filter((p: any) =>
-      p.name.toLowerCase().includes(search) ||
-      p.serialNumber?.toLowerCase().includes(search)
-    ).slice(0, 8);
-  }, [productSearch, products]);
+    return mergedProducts.slice(0, 8);
+  }, [mergedProducts]);
+
+  // "No results" only after query resolved with strictly empty arrays
+  const showNoCustomers = mergedCustomers.length === 0 && !isSearchingCustomers;
+  const showNoProducts = mergedProducts.length === 0 && !isSearchingProducts;
 
   // Load estimate data when editing or duplicating (MUST RUN FIRST)
   useEffect(() => {
@@ -294,11 +362,16 @@ export const EstimateForm: React.FC = () => {
     // Don't recalculate while loading estimate data
     if (isLoadingEstimate) return;
     
-    const subtotal = formData.items.reduce((sum, item) => sum + item.total, 0);
-    const discountAmount = (subtotal * formData.discountPercent) / 100;
+    const subtotal = formData.items.reduce(
+      (sum, item) => sum + (Number(item.total) || (Number(item.quantity || 1) * Number(item.unitPrice || 0))),
+      0
+    );
+    const discountPercent = Number(formData.discountPercent) || 0;
+    const taxPercent = Number(formData.taxPercent) || 0;
+    const discountAmount = (subtotal * discountPercent) / 100;
     const afterDiscount = subtotal - discountAmount;
-    const taxAmount = (afterDiscount * formData.taxPercent) / 100;
-    const total = afterDiscount + taxAmount;
+    const taxAmount = (afterDiscount * taxPercent) / 100;
+    const total = subtotal - discountAmount + taxAmount;
 
     setFormData(prev => ({
       ...prev,
@@ -441,8 +514,12 @@ export const EstimateForm: React.FC = () => {
         
         const updatedItem = { ...item, [field]: value };
         
-        // Recalculate total if quantity, price, or discount changes
+        // Recalculate total if quantity, price, or discount changes.
+        // Strictly parse numeric values to prevent string concatenation.
         if (field === 'quantity' || field === 'unitPrice' || field === 'discount') {
+          updatedItem.quantity = Number(updatedItem.quantity) || 1;
+          updatedItem.unitPrice = Number(updatedItem.unitPrice) || 0;
+          updatedItem.discount = Number(updatedItem.discount) || 0;
           updatedItem.total = updatedItem.quantity * updatedItem.unitPrice * (1 - updatedItem.discount / 100);
         }
         
@@ -485,7 +562,6 @@ export const EstimateForm: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const [isSaving, setIsSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const savedEstimateIdRef = useRef<string | null>(null);
 
@@ -496,19 +572,29 @@ export const EstimateForm: React.FC = () => {
     const apiStatus: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' =
       status === 'sent' ? 'SENT' : status === 'accepted' ? 'ACCEPTED' : status === 'rejected' ? 'REJECTED' : 'DRAFT';
 
+    // Strict numeric sanitization: parseFloat with isNaN fallback to 0
+    const sanitizeNum = (value: number | string | undefined): number => {
+      if (value === undefined || value === null) return 0;
+      const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    const discountAmount = sanitizeNum(formData.discountAmount);
+    const taxAmount = sanitizeNum(formData.taxAmount);
+
     return {
-      customerId: customerIdOverride || formData.customerId || '',
+      customerId: (customerIdOverride || formData.customerId || '').trim(),
       items: formData.items.map(item => ({
         itemType: 'PRODUCT' as const,
         ...(item.productId && item.productId !== '0' ? { productId: item.productId } : {}),
         description: item.productName || item.description || 'Custom item',
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || 0,
-        discount: item.discount || 0,
+        quantity: sanitizeNum(item.quantity) > 0 ? sanitizeNum(item.quantity) : 1,
+        unitPrice: sanitizeNum(item.unitPrice),
+        discount: sanitizeNum(item.discount),
       })),
       status: apiStatus,
-      discountTotal: formData.discountAmount || 0,
-      taxTotal: formData.taxAmount || 0,
+      discountTotal: discountAmount,
+      taxTotal: taxAmount,
       validityDate: formData.expiryDate || undefined,
       notes: formData.notes || undefined,
       terms: formData.terms || undefined,
@@ -527,7 +613,6 @@ export const EstimateForm: React.FC = () => {
   // Shared save routine: returns the persisted estimate id on success, null on failure
   const saveCurrentEstimate = async (status: EstimateStatus = 'draft'): Promise<string | null> => {
     if (!validateForm()) return null;
-    setIsSaving(true);
     try {
       // Inline customer creation: persist the customer first to get a real DB id.
       let customerId = formData.customerId;
@@ -558,35 +643,39 @@ export const EstimateForm: React.FC = () => {
       console.error('Failed to save estimate:', error);
       toast.error(getServerErrorMessage(error), { duration: 6000 });
       return null;
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handleSubmit = async (status: EstimateStatus = 'draft') => {
     const savedId = await saveCurrentEstimate(status);
-    if (savedId) navigate('/estimates');
+    if (savedId) navigate('/system/estimates');
   };
 
   // Get estimate data for print/preview
-  const getEstimateData = () => ({
-    estimateNumber: isEditing ? `EST-${id}` : estimateNumber,
-    customerName: formData.customerName,
-    customerPhone: formData.customerPhone,
-    customerEmail: formData.customerEmail || undefined,
-    customerAddress: formData.customerAddress || undefined,
-    estimateDate: formData.estimateDate,
-    expiryDate: formData.expiryDate,
-    items: formData.items,
-    subtotal: formData.subtotal,
-    discountPercent: formData.discountPercent,
-    discountAmount: formData.discountAmount,
-    taxPercent: formData.taxPercent,
-    taxAmount: formData.taxAmount,
-    total: formData.total,
-    notes: formData.notes || undefined,
-    terms: formData.terms || undefined,
-  });
+  const getEstimateData = () => {
+    const rawNumber = isEditing ? `${id}` : estimateNumber;
+    const cleanedNumber = rawNumber.startsWith('EST-') ? rawNumber : `EST-${rawNumber}`;
+    return {
+      ...{
+        estimateNumber: cleanedNumber,
+      },
+      customerName: formData.customerName,
+      customerPhone: formData.customerPhone,
+      customerEmail: formData.customerEmail || undefined,
+      customerAddress: formData.customerAddress || undefined,
+      estimateDate: formData.estimateDate,
+      expiryDate: formData.expiryDate,
+      items: formData.items,
+      subtotal: formData.subtotal,
+      discountPercent: formData.discountPercent,
+      discountAmount: formData.discountAmount,
+      taxPercent: formData.taxPercent,
+      taxAmount: formData.taxAmount,
+      total: formData.total,
+      notes: formData.notes || undefined,
+      terms: formData.terms || undefined,
+    };
+  };
 
   const ensureSavedForPrint = async (): Promise<string | null> => {
     if (savedEstimateIdRef.current) return savedEstimateIdRef.current;
@@ -757,7 +846,7 @@ export const EstimateForm: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/estimates')}
+            onClick={() => navigate('/system/estimates')}
             className={`p-2 rounded-xl border transition-all ${
               theme === 'dark'
                 ? 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/50 text-slate-400'
@@ -859,11 +948,16 @@ export const EstimateForm: React.FC = () => {
                             </button>
                           ))}
                         </>
-                      ) : (
+                      ) : isSearchingCustomers || isLoadingCustomers ? (
+                        <div className={`px-4 py-3 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <Search className="w-4 h-4 animate-spin" />
+                          Searching...
+                        </div>
+                      ) : showNoCustomers ? (
                         <div className={`px-4 py-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                           No customers found
                         </div>
-                      )}
+                      ) : null}
                       <button
                         type="button"
                         onClick={handleNewCustomer}
@@ -1051,11 +1145,16 @@ export const EstimateForm: React.FC = () => {
                           </span>
                         </button>
                       ))
-                    ) : (
+                    ) : isSearchingProducts || isLoadingProducts ? (
+                      <div className={`px-4 py-3 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <Search className="w-4 h-4 animate-spin" />
+                        Searching...
+                      </div>
+                    ) : showNoProducts ? (
                       <div className={`px-4 py-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                         No products found
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1433,7 +1532,7 @@ export const EstimateForm: React.FC = () => {
                 </div>
 
                 {/* Discount */}
-                <div className="flex items-center justify-between gap-3">
+                <div className={`flex items-center justify-between gap-3 pb-3 border-b border-dashed ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
                   <div className="flex items-center gap-2">
                     <span className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Discount</span>
                     <div className="flex items-center">
@@ -1443,22 +1542,22 @@ export const EstimateForm: React.FC = () => {
                         max="100"
                         value={formData.discountPercent}
                         onChange={(e) => handleInputChange('discountPercent', parseFloat(e.target.value) || 0)}
-                        className={`w-16 px-2 py-1 rounded-lg border text-center text-sm ${
+                        className={`w-16 px-2 py-1.5 rounded-lg border text-center text-sm font-medium transition-all ${
                           theme === 'dark'
-                            ? 'bg-slate-800 border-slate-700 text-white'
-                            : 'bg-white border-slate-200 text-slate-900'
+                            ? 'bg-slate-900/60 border-emerald-500/40 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                            : 'bg-white border-emerald-300 text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
                         }`}
                       />
                       <Percent className={`w-3.5 h-3.5 ml-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                     </div>
                   </div>
-                  <span className="text-red-500 font-medium">
-                    -{formatCurrency(formData.discountAmount)}
+                  <span className="text-red-500 font-semibold">
+                    -Rs. {formatCurrency(formData.discountAmount).replace('Rs. ', '')}
                   </span>
                 </div>
 
                 {/* Tax */}
-                <div className="flex items-center justify-between gap-3">
+                <div className={`flex items-center justify-between gap-3 pb-3 border-b border-dashed ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
                   <div className="flex items-center gap-2">
                     <span className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Tax</span>
                     <div className="flex items-center">
@@ -1468,17 +1567,17 @@ export const EstimateForm: React.FC = () => {
                         max="100"
                         value={formData.taxPercent}
                         onChange={(e) => handleInputChange('taxPercent', parseFloat(e.target.value) || 0)}
-                        className={`w-16 px-2 py-1 rounded-lg border text-center text-sm ${
+                        className={`w-16 px-2 py-1.5 rounded-lg border text-center text-sm font-medium transition-all ${
                           theme === 'dark'
-                            ? 'bg-slate-800 border-slate-700 text-white'
-                            : 'bg-white border-slate-200 text-slate-900'
+                            ? 'bg-slate-900/60 border-emerald-500/40 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                            : 'bg-white border-emerald-300 text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
                         }`}
                       />
                       <Percent className={`w-3.5 h-3.5 ml-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                     </div>
                   </div>
-                  <span className={`font-medium ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-                    +{formatCurrency(formData.taxAmount)}
+                  <span className={`font-medium ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    +Rs. {formatCurrency(formData.taxAmount).replace('Rs. ', '')}
                   </span>
                 </div>
 

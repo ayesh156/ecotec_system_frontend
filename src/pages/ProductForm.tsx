@@ -1048,7 +1048,7 @@ export const ProductForm: React.FC = () => {
       loadProducts(true);
 
       // Navigate back to products list with the saved product data for local update (no full reload)
-      navigate('/products', { 
+      navigate('/system/products', {
         state: { 
           highlightProductId: savedProductId,
           highlightProductName: savedProductName,
@@ -1102,7 +1102,7 @@ export const ProductForm: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-0">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/products')}
+            onClick={() => navigate('/system/products')}
             disabled={isSaving}
             className={`p-2 rounded-xl transition-colors ${
               theme === 'dark' 
@@ -1966,7 +1966,7 @@ export const ProductForm: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/products')}
+              onClick={() => navigate('/system/products')}
               disabled={isSaving}
               className={`flex-1 px-4 py-2.5 rounded-xl font-medium transition-colors border order-2 sm:order-2 ${
                 theme === 'dark'

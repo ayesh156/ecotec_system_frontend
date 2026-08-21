@@ -520,7 +520,7 @@ export const CreateGRN: React.FC = () => {
 
   const handleClosePrintAndNavigate = () => {
     setShowPrintPreview(false);
-    navigate('/grn');
+    navigate('/system/grn');
   };
 
   const canProceedToStep2 = selectedSupplier !== '';
@@ -754,7 +754,7 @@ export const CreateGRN: React.FC = () => {
         theme === 'dark' ? 'bg-slate-800/50' : 'bg-white shadow-sm'
       }`}>
         <button
-          onClick={() => navigate('/grn')}
+          onClick={() => navigate('/system/grn')}
           className={`p-2 rounded-xl transition-colors ${
             theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
           }`}

@@ -311,24 +311,32 @@ export const Settings: React.FC = () => {
     setCurrentPage(1);
   }, [userSearchQuery, statusFilter, roleFilter]);
 
-  // Toggle section visibility - LOCAL only (no auto-save)
+  // Toggle section visibility - LOCAL + IMMEDIATE persist for real-time sync
   // SuperAdmin toggles hiddenSections (affects ADMIN + USER)
   // Shop ADMIN toggles adminHiddenSections (affects USER only)
-  const toggleSection = (path: string) => {
-    if (isSuperAdmin) {
-      // SuperAdmin: Toggle in hiddenSections
-      const newHiddenSections = localHiddenSections.includes(path)
-        ? localHiddenSections.filter(p => p !== path)
-        : [...localHiddenSections, path];
-      
-      setLocalHiddenSections(newHiddenSections);
-    } else if (isShopAdmin) {
-      // Shop ADMIN: Toggle in adminHiddenSections (only affects regular users)
-      const newAdminHiddenSections = localAdminHiddenSections.includes(path)
-        ? localAdminHiddenSections.filter(p => p !== path)
-        : [...localAdminHiddenSections, path];
-      
-      setLocalAdminHiddenSections(newAdminHiddenSections);
+  const toggleSection = async (path: string) => {
+    try {
+      if (isSuperAdmin) {
+        // SuperAdmin: Toggle in hiddenSections
+        const newHiddenSections = localHiddenSections.includes(path)
+          ? localHiddenSections.filter(p => p !== path)
+          : [...localHiddenSections, path];
+        
+        setLocalHiddenSections(newHiddenSections);
+        // Persist immediately to backend so ShopSectionsContext state updates reactively
+        await updateHiddenSections(newHiddenSections);
+      } else if (isShopAdmin) {
+        // Shop ADMIN: Toggle in adminHiddenSections (only affects regular users)
+        const newAdminHiddenSections = localAdminHiddenSections.includes(path)
+          ? localAdminHiddenSections.filter(p => p !== path)
+          : [...localAdminHiddenSections, path];
+        
+        setLocalAdminHiddenSections(newAdminHiddenSections);
+        // Persist immediately to backend so ShopSectionsContext state updates reactively
+        await updateAdminHiddenSections(newAdminHiddenSections);
+      }
+    } catch (error) {
+      console.error('❌ Failed to toggle section:', error);
     }
   };
 

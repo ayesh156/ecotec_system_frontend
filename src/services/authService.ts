@@ -210,7 +210,6 @@ apiClient.interceptors.response.use(
     ) {
       originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
       const delay = 3000 * originalRequest._retryCount;
-      console.log(`⏳ Server waking up (${status || 'network error'})... retry ${originalRequest._retryCount}/5 in ${delay / 1000}s`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return apiClient(originalRequest);
     }
@@ -398,7 +397,6 @@ export const authService = {
 
     // FAST PATH: Access token exists and not expired - restore instantly
     if (storedAccessToken && cachedUser && !isTokenExpired(storedAccessToken)) {
-      console.log('⚡ Instant session restore (token still valid)');
       setAccessToken(storedAccessToken); // ensure in-memory is set
       return cachedUser;
     }
@@ -409,7 +407,6 @@ export const authService = {
     }
 
     try {
-      console.log('🔄 Token expired, refreshing...');
       const response = await authService.refresh();
       const user = response.data.user;
       setCachedUser(user);

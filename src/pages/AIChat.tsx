@@ -533,7 +533,7 @@ How can I help you today? 😊`,
             Please configure your Gemini API key in the .env file to use the AI Assistant.
           </p>
           <button
-            onClick={() => navigate('/settings')}
+            onClick={() => navigate('/system/settings')}
             className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-emerald-500/25 transition-all"
           >
             Go to Settings

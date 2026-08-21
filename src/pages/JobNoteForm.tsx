@@ -321,7 +321,7 @@ export const JobNoteForm: React.FC = () => {
     };
 
     console.log('Saving Job Note:', jobNote);
-    navigate('/job-notes');
+    navigate('/system/job-notes');
   };
 
   const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString('en-LK')}`;
@@ -453,7 +453,7 @@ export const JobNoteForm: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/job-notes')}
+            onClick={() => navigate('/system/job-notes')}
             className={`p-2 rounded-xl transition-colors ${theme === 'dark' ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}
           >
             <ArrowLeft className="w-5 h-5" />
@@ -913,7 +913,7 @@ export const JobNoteForm: React.FC = () => {
         <div className={`mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl ${theme === 'dark' ? 'bg-slate-800/50 border border-slate-700/50' : 'bg-slate-50 border border-slate-200'}`}>
           <button
             type="button"
-            onClick={() => navigate('/job-notes')}
+            onClick={() => navigate('/system/job-notes')}
             className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'}`}
           >
             <ArrowLeft className="w-4 h-4" />

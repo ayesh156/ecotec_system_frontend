@@ -66,33 +66,44 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
   
   // Track if we're transitioning shops (prevents flickering)
   const [isTransitioning, setIsTransitioning] = useState(false);
-  
-  // Customers state
+
+  // ---- STATE (kept for reactivity in children) ----
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customersLoaded, setCustomersLoaded] = useState(false);
-  const lastCustomersUpdateRef = useRef<number | null>(null);
   
-  // Products state
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsLoaded, setProductsLoaded] = useState(false);
-  const lastProductsUpdateRef = useRef<number | null>(null);
   
-  // Invoices state
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [invoicesLoaded, setInvoicesLoaded] = useState(false);
-  const lastInvoicesUpdateRef = useRef<number | null>(null);
   
   const [isUsingAPI, setIsUsingAPI] = useState(false);
+
+  // ---- REFS (mirror state so loader callbacks stay STABLE, preventing effect re-fetch loops) ----
+  const customersRef = useRef<Customer[]>([]);
+  const productsRef = useRef<Product[]>([]);
+  const invoicesRef = useRef<Invoice[]>([]);
+  const customersLoadedRef = useRef(false);
+  const productsLoadedRef = useRef(false);
+  const invoicesLoadedRef = useRef(false);
+  const lastCustomersUpdateRef = useRef<number | null>(null);
+  const lastProductsUpdateRef = useRef<number | null>(null);
+  const lastInvoicesUpdateRef = useRef<number | null>(null);
+
+  // Keep refs and state in sync
+  const syncCustomers = (data: Customer[]) => { customersRef.current = data; setCustomers(data); };
+  const syncProducts = (data: Product[]) => { productsRef.current = data; setProducts(data); };
+  const syncInvoices = (data: Invoice[]) => { invoicesRef.current = data; setInvoices(data); };
   
   // Get the effective shop ID (viewing shop for SUPER_ADMIN, own shop otherwise)
   // Memoize to prevent unnecessary re-renders
   const effectiveShopId = useMemo(() => {
     return user?.shop?.id || null;
   }, [user?.shop?.id]);
-  
+
   // Clear cache when switching shops (SUPER_ADMIN viewing different shops)
   useEffect(() => {
     const newShopId = effectiveShopId || null;
@@ -103,8 +114,6 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     const shopChanged = previousShopId !== newShopId && (previousShopId !== null || newShopId !== null);
     
     if (shopChanged) {
-      console.log('🔄 Shop changed from', previousShopId, 'to', newShopId, '- clearing data cache');
-      
       // Start transition - prevents showing stale data
       setIsTransitioning(true);
       
@@ -118,15 +127,18 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Clear all cached data atomically (including persistent cache)
       clearAllCaches();
       
-      setCustomers([]);
+      syncCustomers([]);
+      customersLoadedRef.current = false;
       setCustomersLoaded(false);
       lastCustomersUpdateRef.current = null;
       
-      setProducts([]);
+      syncProducts([]);
+      productsLoadedRef.current = false;
       setProductsLoaded(false);
       lastProductsUpdateRef.current = null;
       
-      setInvoices([]);
+      syncInvoices([]);
+      invoicesLoadedRef.current = false;
       setInvoicesLoaded(false);
       lastInvoicesUpdateRef.current = null;
       
@@ -137,7 +149,10 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     currentShopIdRef.current = newShopId;
   }, [effectiveShopId]);
 
-  // Load customers with caching and race condition protection
+  // Load customers with caching and race condition protection.
+  // STABLE useCallback: only depends on effectiveShopId + isTransitioning state,
+  // reads data/loaded flags from refs so changing data does NOT re-create this
+  // function (which would re-trigger consumer useEffect fetch loops).
   const loadCustomers = useCallback(async (forceRefresh = false): Promise<Customer[]> => {
     const now = Date.now();
     const cacheValid = lastCustomersUpdateRef.current && 
@@ -147,22 +162,21 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     const shopIdParam = effectiveShopId || undefined;
     
     // Skip if already loaded and cache is valid (unless force refresh)
-    if (customersLoaded && cacheValid && !forceRefresh && !isTransitioning) {
-      console.log('📦 Using cached customers for shop:', shopIdParam || 'own');
-      return customers;
+    if (customersLoadedRef.current && cacheValid && !forceRefresh && !isTransitioning) {
+      return customersRef.current;
     }
     
-    // Try persistent cache first (instant load from localStorage)
-    if (!forceRefresh && !isTransitioning && !customersLoaded) {
+    // Try persistent cache first (instant load from localStorage).
+    // NOTE: We intentionally do NOT schedule a self-refreshing setTimeout here,
+    // as that re-triggered fetch loops. Fresh data is obtained on expiry/refresh.
+    if (!forceRefresh && !isTransitioning && !customersLoadedRef.current) {
       const persistedCustomers = getCachedData<Customer[]>('customers', effectiveShopId);
       if (persistedCustomers && persistedCustomers.length > 0) {
-        console.log('💾 Using persisted customers cache:', persistedCustomers.length);
-        setCustomers(persistedCustomers);
+        syncCustomers(persistedCustomers);
+        customersLoadedRef.current = true;
         setCustomersLoaded(true);
         setIsUsingAPI(true);
         lastCustomersUpdateRef.current = now;
-        // Still refresh in background for fresh data
-        setTimeout(() => loadCustomers(true).catch(() => {}), 2000);
         return persistedCustomers;
       }
     }
@@ -171,38 +185,35 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     const requestVersion = ++requestVersionRef.current.customers;
     
     // Try stale persistent cache as instant fallback while loading
-    if (!customersLoaded) {
+    if (!customersLoadedRef.current) {
       const staleCustomers = getStaleCachedData<Customer[]>('customers', effectiveShopId);
       if (staleCustomers && staleCustomers.length > 0) {
-        console.log('📄 Using stale customers cache while loading:', staleCustomers.length);
-        setCustomers(staleCustomers);
+        syncCustomers(staleCustomers);
         setIsUsingAPI(true);
       }
     }
     
     setCustomersLoading(true);
     try {
-      console.log('📡 Fetching customers for shop:', shopIdParam || 'own');
       const { customers: apiCustomers } = await customerService.getAll({ limit: 1000, shopId: shopIdParam });
       
       // Check if this request is still valid (shop hasn't changed)
       if (requestVersion !== requestVersionRef.current.customers) {
-        console.log('⏭️ Customers request outdated (shop changed), ignoring results');
-        return customers;
+        return customersRef.current;
       }
       
       const converted = apiCustomers.map(convertAPICustomerToFrontend);
       if (converted.length > 0 || forceRefresh) {
-        setCustomers(converted);
+        syncCustomers(converted);
         setIsUsingAPI(true);
         // Persist to localStorage for next visit
         setCachedData('customers', converted, effectiveShopId);
-        console.log('✅ Loaded customers from API:', converted.length, shopIdParam ? `(shop: ${shopIdParam})` : '(own shop)');
+        customersLoadedRef.current = true;
         setCustomersLoaded(true);
         lastCustomersUpdateRef.current = now;
         return converted;
       }
-      return customers;
+      return customersRef.current;
     } catch (error) {
       console.warn('⚠️ Failed to load customers from API:', error);
       throw error;
@@ -212,9 +223,9 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
         setCustomersLoading(false);
       }
     }
-  }, [customersLoaded, customers, effectiveShopId, isTransitioning]);
+  }, [effectiveShopId, isTransitioning]);
 
-  // Load products with caching and race condition protection
+  // Load products with caching and race condition protection (STABLE callback).
   const loadProducts = useCallback(async (forceRefresh = false): Promise<Product[]> => {
     const now = Date.now();
     const cacheValid = lastProductsUpdateRef.current && 
@@ -224,22 +235,20 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     const shopIdParam = effectiveShopId || undefined;
     
     // Skip if already loaded and cache is valid (unless force refresh)
-    if (productsLoaded && cacheValid && !forceRefresh && !isTransitioning) {
-      console.log('📦 Using cached products for shop:', shopIdParam || 'own');
-      return products;
+    if (productsLoadedRef.current && cacheValid && !forceRefresh && !isTransitioning) {
+      return productsRef.current;
     }
     
-    // Try persistent cache first (instant load from localStorage)
-    if (!forceRefresh && !isTransitioning && !productsLoaded) {
+    // Try persistent cache first (instant load from localStorage).
+    // NOTE: No self-scheduling background refresh here (avoided fetch loop).
+    if (!forceRefresh && !isTransitioning && !productsLoadedRef.current) {
       const persistedProducts = getCachedData<Product[]>('products', effectiveShopId);
       if (persistedProducts && persistedProducts.length > 0) {
-        console.log('💾 Using persisted products cache:', persistedProducts.length);
-        setProducts(persistedProducts);
+        syncProducts(persistedProducts);
+        productsLoadedRef.current = true;
         setProductsLoaded(true);
         setIsUsingAPI(true);
         lastProductsUpdateRef.current = now;
-        // Still refresh in background for fresh data
-        setTimeout(() => loadProducts(true).catch(() => {}), 2000);
         return persistedProducts;
       }
     }
@@ -248,38 +257,35 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     const requestVersion = ++requestVersionRef.current.products;
     
     // Try stale persistent cache as instant fallback while loading
-    if (!productsLoaded) {
+    if (!productsLoadedRef.current) {
       const staleProducts = getStaleCachedData<Product[]>('products', effectiveShopId);
       if (staleProducts && staleProducts.length > 0) {
-        console.log('📄 Using stale products cache while loading:', staleProducts.length);
-        setProducts(staleProducts);
+        syncProducts(staleProducts);
         setIsUsingAPI(true);
       }
     }
     
     setProductsLoading(true);
     try {
-      console.log('📡 Fetching products for shop:', shopIdParam || 'own');
       const { products: apiProducts } = await productService.getAll({ limit: 1000, shopId: shopIdParam });
       
       // Check if this request is still valid (shop hasn't changed)
       if (requestVersion !== requestVersionRef.current.products) {
-        console.log('⏭️ Products request outdated (shop changed), ignoring results');
-        return products;
+        return productsRef.current;
       }
       
       const converted = apiProducts.map(convertAPIProductToFrontend);
       if (converted.length > 0 || forceRefresh) {
-        setProducts(converted);
+        syncProducts(converted);
         setIsUsingAPI(true);
         // Persist to localStorage for next visit
         setCachedData('products', converted, effectiveShopId);
-        console.log('✅ Loaded products from API:', converted.length, shopIdParam ? `(shop: ${shopIdParam})` : '(own shop)');
+        productsLoadedRef.current = true;
         setProductsLoaded(true);
         lastProductsUpdateRef.current = now;
         return converted;
       }
-      return products;
+      return productsRef.current;
     } catch (error) {
       console.warn('⚠️ Failed to load products from API:', error);
       throw error;
@@ -289,9 +295,9 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
         setProductsLoading(false);
       }
     }
-  }, [productsLoaded, products, effectiveShopId, isTransitioning]);
+  }, [effectiveShopId, isTransitioning]);
 
-  // Load invoices with caching and race condition protection
+  // Load invoices with caching and race condition protection (STABLE callback).
   const loadInvoices = useCallback(async (forceRefresh = false): Promise<Invoice[]> => {
     const now = Date.now();
     const cacheValid = lastInvoicesUpdateRef.current && 
@@ -301,22 +307,20 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     const shopIdParam = effectiveShopId || undefined;
     
     // Skip if already loaded and cache is valid (unless force refresh)
-    if (invoicesLoaded && cacheValid && !forceRefresh && !isTransitioning) {
-      console.log('📦 Using cached invoices for shop:', shopIdParam || 'own');
-      return invoices;
+    if (invoicesLoadedRef.current && cacheValid && !forceRefresh && !isTransitioning) {
+      return invoicesRef.current;
     }
     
-    // Try persistent cache first (instant load from localStorage)
-    if (!forceRefresh && !isTransitioning && !invoicesLoaded) {
+    // Try persistent cache first (instant load from localStorage).
+    // NOTE: No self-scheduling background refresh here (avoided fetch loop).
+    if (!forceRefresh && !isTransitioning && !invoicesLoadedRef.current) {
       const persistedInvoices = getCachedData<Invoice[]>('invoices', effectiveShopId);
       if (persistedInvoices && persistedInvoices.length > 0) {
-        console.log('💾 Using persisted invoices cache:', persistedInvoices.length);
-        setInvoices(persistedInvoices);
+        syncInvoices(persistedInvoices);
+        invoicesLoadedRef.current = true;
         setInvoicesLoaded(true);
         setIsUsingAPI(true);
         lastInvoicesUpdateRef.current = now;
-        // Still refresh in background for fresh data
-        setTimeout(() => loadInvoices(true).catch(() => {}), 2000);
         return persistedInvoices;
       }
     }
@@ -325,18 +329,16 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     const requestVersion = ++requestVersionRef.current.invoices;
     
     // Try stale persistent cache as instant fallback while loading
-    if (!invoicesLoaded) {
+    if (!invoicesLoadedRef.current) {
       const staleInvoices = getStaleCachedData<Invoice[]>('invoices', effectiveShopId);
       if (staleInvoices && staleInvoices.length > 0) {
-        console.log('📄 Using stale invoices cache while loading:', staleInvoices.length);
-        setInvoices(staleInvoices);
+        syncInvoices(staleInvoices);
         setIsUsingAPI(true);
       }
     }
     
     setInvoicesLoading(true);
     try {
-      console.log('📡 Fetching invoices for shop:', shopIdParam || 'own');
       const { invoices: apiInvoices } = await invoiceService.getAll({
         page: 1,
         limit: 1000,
@@ -347,16 +349,15 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
       
       // Check if this request is still valid (shop hasn't changed)
       if (requestVersion !== requestVersionRef.current.invoices) {
-        console.log('⏭️ Invoices request outdated (shop changed), ignoring results');
-        return invoices;
+        return invoicesRef.current;
       }
       
       const converted = apiInvoices.map(convertAPIInvoiceToFrontend);
-      setInvoices(converted);
+      syncInvoices(converted);
       setIsUsingAPI(true);
       // Persist to localStorage for next visit
       setCachedData('invoices', converted, effectiveShopId);
-      console.log('✅ Loaded invoices from API:', converted.length, shopIdParam ? `(shop: ${shopIdParam})` : '(own shop)');
+      invoicesLoadedRef.current = true;
       setInvoicesLoaded(true);
       lastInvoicesUpdateRef.current = now;
       return converted;
@@ -369,7 +370,7 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
         setInvoicesLoading(false);
       }
     }
-  }, [invoicesLoaded, invoices, effectiveShopId, isTransitioning]);
+  }, [effectiveShopId, isTransitioning]);
 
   return (
     <DataCacheContext.Provider value={{

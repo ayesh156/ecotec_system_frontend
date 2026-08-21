@@ -217,7 +217,7 @@ export const JobNotes: React.FC = () => {
           <h1 className={`text-2xl lg:text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Job Notes</h1>
           <p className={`mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Manage service and repair job orders</p>
         </div>
-        <button onClick={() => navigate('/job-notes/create')} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity">
+        <button onClick={() => navigate('/system/job-notes/create')} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity">
           <Plus className="w-5 h-5" />New Job Note
         </button>
       </div>
@@ -438,7 +438,7 @@ export const JobNotes: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <button onClick={() => handleView(job)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Eye className="w-4 h-4" /></button>
                   <button onClick={() => handlePrintJob(job)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400' : 'hover:bg-emerald-50 text-slate-600 hover:text-emerald-600'}`}><Printer className="w-4 h-4" /></button>
-                  <button onClick={() => navigate(`/job-notes/edit/${job.id}`)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`}><Edit className="w-4 h-4" /></button>
+                  <button onClick={() => navigate(`/system/job-notes/edit/${job.id}`)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`}><Edit className="w-4 h-4" /></button>
                   <button onClick={() => handleDelete(job)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-50 text-slate-600 hover:text-red-600'}`}><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
@@ -465,7 +465,7 @@ export const JobNotes: React.FC = () => {
                     <td className="px-4 py-3"><div className="flex items-center justify-end gap-1">
                       <button onClick={() => handleView(job)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Eye className="w-4 h-4" /></button>
                       <button onClick={() => handlePrintJob(job)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400' : 'hover:bg-emerald-50 text-slate-600 hover:text-emerald-600'}`}><Printer className="w-4 h-4" /></button>
-                      <button onClick={() => navigate(`/job-notes/edit/${job.id}`)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`}><Edit className="w-4 h-4" /></button>
+                      <button onClick={() => navigate(`/system/job-notes/edit/${job.id}`)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`}><Edit className="w-4 h-4" /></button>
                       <button onClick={() => handleDelete(job)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-50 text-slate-600 hover:text-red-600'}`}><Trash2 className="w-4 h-4" /></button>
                     </div></td>
                   </tr>

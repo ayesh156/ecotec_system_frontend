@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { ReactNode } from 'react';
 import {
   authService,
-  onTokenChange,
   getAccessToken,
   setAccessToken,
   setRefreshToken,
@@ -71,8 +70,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Handle logout event (from interceptor when session expires)
   useEffect(() => {
-    const handleLogoutEvent = (event: CustomEvent<{ reason: string }>) => {
-      console.log('🔒 Session expired, logging out...', event.detail.reason);
+    const handleLogoutEvent = () => {
       setUser(null);
       setCachedUser(null);
       setAccessToken(null);
@@ -88,29 +86,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Sync token changes with state
   useEffect(() => {
-    onTokenChange((token) => {
-      if (!token) {
-        console.log('🔑 Access token cleared');
-      }
-    });
+    // No-op - kept for hook registration
   }, []);
 
   // Try to restore session on mount
   useEffect(() => {
     const restoreSession = async (): Promise<User | null> => {
       try {
-        console.log('🔄 Attempting to restore session...');
         const restoredUser = await authService.restoreSession();
         if (restoredUser) {
           setUser(restoredUser);
-          console.log('✅ Session restored for:', restoredUser.email);
           return restoredUser;
         } else {
-          console.log('ℹ️ No active session');
           return null;
         }
       } catch (err) {
-        console.log('ℹ️ No valid session found');
         return null;
       } finally {
         setIsLoading(false);
@@ -123,7 +113,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const pathname = window.location.pathname;
     const isSystemRoute = pathname.startsWith('/system');
     if (!isSystemRoute) {
-      console.log('🌐 Public route detected, bypassing POS session restoration');
       setIsLoading(false);
       return;
     }
@@ -134,7 +123,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (cachedUser && token) {
       setUser(cachedUser);
       setIsLoading(false);
-      console.log('⚡ Instant user restore from cache:', cachedUser.email);
 
       // Background: validate/refresh token if needed
       restoreSession().then(freshUser => {
@@ -170,7 +158,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.login(credentials);
       setUser(response.data.user);
       setCachedUser(response.data.user);
-      console.log('✅ Login successful:', response.data.user.email);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number; data?: { message?: string } }; code?: string };
       const status = axiosErr?.response?.status;
@@ -194,7 +181,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.register(data);
       setUser(response.data.user);
       setCachedUser(response.data.user);
-      console.log('✅ Registration successful:', response.data.user.email);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Registration failed. Please try again.';
       setError(message);
@@ -209,7 +195,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     try {
       await authService.logout();
-      console.log('✅ Logout successful');
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
@@ -227,7 +212,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     try {
       await authService.logoutAll();
-      console.log('✅ Logged out from all devices');
     } catch (err) {
       console.error('Logout all error:', err);
     } finally {
@@ -247,7 +231,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.updateProfile(data);
       setUser(response.data.user);
       setCachedUser(response.data.user);
-      console.log('✅ Profile updated');
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Profile update failed.';
       setError(message);
@@ -262,7 +245,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await authService.changePassword({ currentPassword, newPassword });
       setUser(null);
       setCachedUser(null);
-      console.log('✅ Password changed, please login again');
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Password change failed.';
       setError(message);

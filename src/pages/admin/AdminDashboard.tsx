@@ -142,7 +142,7 @@ export const AdminDashboard: React.FC = () => {
   // Check authorization
   useEffect(() => {
     if (user && user.role !== 'SUPER_ADMIN') {
-      navigate('/dashboard');
+      navigate('/system/dashboard');
     }
   }, [user, navigate]);
 
@@ -195,7 +195,7 @@ export const AdminDashboard: React.FC = () => {
 
   // View shop dashboard - navigate to shop
   const viewShopDashboard = (_shop: Shop) => {
-    navigate('/');
+    navigate('/system/dashboard');
   };
 
   // View shop details with users

@@ -170,8 +170,8 @@ export const CashManagement: React.FC = () => {
   
   // Determine active view from URL
   const activeTab: TabView = useMemo(() => {
-    if (location.pathname === '/cash-management/transactions') return 'transactions';
-    if (location.pathname === '/cash-management/accounts') return 'accounts';
+    if (location.pathname === '/system/cash-management/transactions') return 'transactions';
+    if (location.pathname === '/system/cash-management/accounts') return 'accounts';
     return 'insights';
   }, [location.pathname]);
   
@@ -2034,7 +2034,7 @@ export const CashManagement: React.FC = () => {
               const colorClass = getAccountColor(account.type, theme);
               const iconColor = getAccountIconColor(account.type);
               return (
-                <div key={account.id} onClick={() => { setSelectedAccount(account.id); navigate('/cash-management/transactions'); }}
+                <div key={account.id} onClick={() => { setSelectedAccount(account.id); navigate('/system/cash-management/transactions'); }}
                   className={`relative overflow-hidden rounded-2xl border p-5 cursor-pointer transition-all hover:scale-[1.02] bg-gradient-to-br ${colorClass}`}>
                   <div className="relative">
                     <div className="flex items-center justify-between">

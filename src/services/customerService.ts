@@ -124,13 +124,11 @@ export const customerService = {
     if (params.shopId) queryParams.append('shopId', params.shopId);
 
     const url = `${API_BASE_URL}/customers?${queryParams.toString()}`;
-    console.log('📝 Fetching customers from:', url);
     const response = await fetchWithAuth(url, {
       headers: getAuthHeaders(),
     });
     const result = await handleResponse<APIResponse<APICustomer[]>>(response);
     
-    console.log('✅ Loaded customers from API:', result.data.length);
     return {
       customers: result.data,
       pagination: result.pagination || { page: 1, limit: 10, total: result.data.length, totalPages: 1 }
@@ -170,7 +168,6 @@ export const customerService = {
    * Create a new customer
    */
   async create(data: CreateCustomerDTO, shopId?: string): Promise<APICustomer> {
-    console.log('📝 Creating customer:', data.name);
     const queryParams = shopId ? `?shopId=${shopId}` : '';
     const response = await fetchWithAuth(`${API_BASE_URL}/customers${queryParams}`, {
       method: 'POST',
@@ -178,7 +175,6 @@ export const customerService = {
       body: JSON.stringify(data),
     });
     const result = await handleResponse<APIResponse<APICustomer>>(response);
-    console.log('✅ Customer created:', result.data.id);
     return result.data;
   },
 
@@ -186,7 +182,6 @@ export const customerService = {
    * Update an existing customer
    */
   async update(id: string, data: UpdateCustomerDTO, shopId?: string): Promise<APICustomer> {
-    console.log('📝 Updating customer:', id);
     const queryParams = shopId ? `?shopId=${shopId}` : '';
     const response = await fetchWithAuth(`${API_BASE_URL}/customers/${id}${queryParams}`, {
       method: 'PUT',
@@ -194,7 +189,6 @@ export const customerService = {
       body: JSON.stringify(data),
     });
     const result = await handleResponse<APIResponse<APICustomer>>(response);
-    console.log('✅ Customer updated:', result.data.id);
     return result.data;
   },
 
@@ -206,7 +200,6 @@ export const customerService = {
     notes?: string;
     paymentMethod?: 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'CHEQUE';
   }): Promise<APICustomer> {
-    console.log('📝 Updating customer credit:', id, operation, amount);
     const response = await fetchWithAuth(`${API_BASE_URL}/customers/${id}/credit`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
@@ -217,7 +210,6 @@ export const customerService = {
       }),
     });
     const result = await handleResponse<APIResponse<APICustomer>>(response);
-    console.log('✅ Customer credit updated:', result.data.creditBalance);
     return result.data;
   },
 
@@ -236,14 +228,12 @@ export const customerService = {
    * Delete a customer (Admin only)
    */
   async delete(id: string, shopId?: string): Promise<void> {
-    console.log('🗑️ Deleting customer:', id);
     const queryParams = shopId ? `?shopId=${shopId}` : '';
     const response = await fetchWithAuth(`${API_BASE_URL}/customers/${id}${queryParams}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
     await handleResponse<APIResponse<null>>(response);
-    console.log('✅ Customer deleted');
   },
 };
 

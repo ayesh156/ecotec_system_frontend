@@ -96,7 +96,6 @@ export const WhatsAppSettingsProvider: React.FC<{ children: ReactNode }> = ({ ch
 
     try {
       const url = `${API_BASE_URL}/shops/current/whatsapp`;
-      console.log(`🔄 Loading WhatsApp settings for shop ${effectiveShopId}`);
       
       const response = await fetch(url, {
         headers: getAuthHeaders(),
@@ -127,11 +126,14 @@ export const WhatsAppSettingsProvider: React.FC<{ children: ReactNode }> = ({ ch
           if (apiShopDetails) {
             setShopDetails(apiShopDetails);
           }
-          
-          console.log(`✅ WhatsApp settings loaded for shop ${effectiveShopId}`);
         }
+      } else if (response.status === 404) {
+        // Endpoint not configured for this shop — silently fall back to defaults
+        // (no error log, no red console output).
+        setSettings(mockWhatsAppSettings);
+        setShopDetails(DEFAULT_SHOP_DETAILS);
       } else {
-        // API error, use defaults
+        // Other API error, use defaults
         console.warn('⚠️ API error loading WhatsApp settings, using defaults');
         setSettings(mockWhatsAppSettings);
       }
@@ -202,7 +204,6 @@ export const WhatsAppSettingsProvider: React.FC<{ children: ReactNode }> = ({ ch
 
     try {
       const url = `${API_BASE_URL}/shops/current/whatsapp`;
-      console.log(`💾 Saving WhatsApp settings for shop ${effectiveShopId}`);
       
       const response = await fetch(url, {
         method: 'PUT',
@@ -212,7 +213,6 @@ export const WhatsAppSettingsProvider: React.FC<{ children: ReactNode }> = ({ ch
       
       if (response.ok) {
         const result = await response.json();
-        console.log(`✅ WhatsApp settings saved for shop ${effectiveShopId}`);
         
         // Update local state with response data (preserve the saved templates)
         if (result.data) {

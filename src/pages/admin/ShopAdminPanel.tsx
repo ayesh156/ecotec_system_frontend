@@ -370,11 +370,11 @@ export const ShopAdminPanel: React.FC = () => {
   // Check authorization - must be ADMIN role or SUPER_ADMIN viewing a shop
   useEffect(() => {
     if (user && !hasAccess) {
-      navigate('/dashboard');
+      navigate('/system/dashboard');
     }
     // Sections tab only accessible by SUPER_ADMIN
     if (activeSection === 'sections' && !canAccessSections) {
-      navigate('/shop-admin/users');
+      navigate('/system/shop-admin/users');
     }
   }, [user, hasAccess, navigate, activeSection, canAccessSections]);
 

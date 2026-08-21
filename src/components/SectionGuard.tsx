@@ -24,7 +24,21 @@ export const SectionGuard: React.FC<SectionGuardProps> = ({ path, children }) =>
   const { theme } = useTheme();
   const navigate = useNavigate();
 
-  // Show loading while checking sections
+  // Dashboard (`/` or `/system`) must ALWAYS be accessible as the root
+  // fallback route. It can never be hidden, so render children immediately
+  // without waiting for section loading state.
+  const normalizedPath = path.toLowerCase().startsWith('/system')
+    ? (path.slice('/system'.length) || '/')
+    : path;
+  const isDashboard = normalizedPath === '/' || normalizedPath === '/system' || normalizedPath === '/dashboard';
+
+  if (isDashboard) {
+    return <>{children}</>;
+  }
+
+  // Show a brief loading state while sections load, but NEVER hang forever.
+  // If loading stays true indefinitely, fall through to render children so
+  // users are never trapped on an infinite spinner.
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[60vh]">

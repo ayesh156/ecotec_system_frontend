@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { mockProducts } from '../data/mockData';
 import type { Customer, Product } from '../data/mockData';
 import { quotationService } from '../services/quotationService';
@@ -173,6 +174,7 @@ interface DuplicateFromData {
 export const QuotationForm: React.FC = () => {
   const { theme } = useTheme();
   const { branding: shopBranding } = useShopBranding();
+  const { customers: cachedCustomers, products: cachedProducts, loadCustomers, loadProducts, isLoadingCustomers, isLoadingProducts } = useDataCache();
   const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
@@ -195,6 +197,9 @@ export const QuotationForm: React.FC = () => {
   const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
   // Currently verified customer shown as the selected customer card
   const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
+  // Product search loading flag
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const productSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Product Search
   const [productSearch, setProductSearch] = useState('');
@@ -217,8 +222,20 @@ export const QuotationForm: React.FC = () => {
   // Preview State
   const [showPreview, setShowPreview] = useState(false);
 
+  // Instant in-memory cache filtering for customers (case-insensitive across name/phone/email)
+  const cacheFilteredCustomers = useMemo(() => {
+    if (!customerSearch || customerSearch.trim().length === 0) return [];
+    const q = customerSearch.trim().toLowerCase();
+    return (cachedCustomers as any[]).filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q)
+    );
+  }, [cachedCustomers, customerSearch]);
+
   // Debounced LIVE customer search against GET /api/v1/customers?search=...
-  // Typing just 1 character (e.g. "a") queries the database so real customers appear.
+  // Cache is searched instantly; a debounced background fetch hydrates the cache.
+  // Keeps previous suggestions visible while the network request is in flight.
   useEffect(() => {
     if (!customerSearch || customerSearch.trim().length === 0) {
       setApiCustomers([]);
@@ -228,45 +245,93 @@ export const QuotationForm: React.FC = () => {
     const timer = setTimeout(async () => {
       try {
         const result = await customerService.getAll({ search: customerSearch.trim(), limit: 8 });
-        setApiCustomers(result.customers);
+        // Merge with cache results (cache-first, remote overrides by id)
+        const merged = new Map<string, any>();
+        cacheFilteredCustomers.forEach(c => merged.set(c.id, c));
+        (result.customers || []).forEach(c => merged.set(c.id, c));
+        setApiCustomers(Array.from(merged.values()));
+        if (cachedCustomers.length === 0) {
+          loadCustomers(true).catch(() => {});
+        }
       } catch (error) {
         console.error('Failed to fetch customers:', error);
-        setApiCustomers([]);
+        setApiCustomers(cacheFilteredCustomers);
       } finally {
         setIsSearchingCustomers(false);
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [customerSearch]);
+  }, [customerSearch, cacheFilteredCustomers, cachedCustomers.length, loadCustomers]);
 
-  // Load recent customers when the search field is focused with an empty query so
-  // the dropdown never silently shows "No customers found" without data.
+  // Load recent customers when the search field is focused with an empty query.
+  // Uses cached customers instantly if available; otherwise hydrates from the API.
   const loadRecentCustomers = async () => {
     if (customerSearch?.trim()) return;
-    try {
+    // Show cache instantly if already loaded
+    if (cachedCustomers.length > 0) {
+      setApiCustomers(cachedCustomers as any[]);
+      return;
+    }
+    // Hydrate cache in the background (do not clear existing suggestions)
+    if (!isSearchingCustomers) {
       setIsSearchingCustomers(true);
-      const result = await customerService.getAll({ limit: 8 });
-      setApiCustomers(result.customers);
-    } catch (error) {
-      console.error('Failed to fetch recent customers:', error);
-      setApiCustomers([]);
-    } finally {
-      setIsSearchingCustomers(false);
+      loadCustomers(true).then(() => {}).catch((error) => {
+        console.error('Failed to fetch recent customers:', error);
+        setApiCustomers([]);
+      }).finally(() => setIsSearchingCustomers(false));
     }
   };
 
-  // Customers from the live backend search.
-  const filteredCustomers = useMemo(() => apiCustomers, [apiCustomers]);
+  // Customers from cache + live backend search merged.
+  const filteredCustomers = useMemo(() => {
+    if (customerSearch?.trim()) return apiCustomers;
+    return apiCustomers.slice(0, 8);
+  }, [apiCustomers, customerSearch]);
 
-  // Filter products for search
+  // Instant in-memory cache filtering for products (case-insensitive across name/SKU/barcode)
+  const cacheFilteredProducts = useMemo(() => {
+    if (!productSearch) return [];
+    const q = productSearch.trim().toLowerCase();
+    return (cachedProducts as any[]).filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.serialNumber || '').toLowerCase().includes(q) ||
+      (p.sku || '').toLowerCase().includes(q) ||
+      (p.barcode || '').toLowerCase().includes(q)
+    );
+  }, [cachedProducts, productSearch]);
+
+  // Debounced background product fetch to hydrate cache; never clears current suggestions.
+  useEffect(() => {
+    if (productSearchTimer.current) clearTimeout(productSearchTimer.current);
+    if (!productSearch.trim()) return;
+    productSearchTimer.current = setTimeout(() => {
+      if (cachedProducts.length === 0) {
+        setIsSearchingProducts(true);
+        loadProducts(true).catch(() => {}).finally(() => setIsSearchingProducts(false));
+      }
+    }, 300);
+    return () => {
+      if (productSearchTimer.current) clearTimeout(productSearchTimer.current);
+    };
+  }, [productSearch, cachedProducts.length, loadProducts]);
+
+  // Filter products for search: cache-first, fall back to local mock data for offline-ish display
   const filteredProducts = useMemo(() => {
     if (!productSearch) return [];
+    const cacheResults = cacheFilteredProducts;
+    if (cacheResults.length > 0) return cacheResults.slice(0, 8);
     const search = productSearch.toLowerCase();
     return mockProducts.filter(p =>
       p.name.toLowerCase().includes(search) ||
-      p.serialNumber?.toLowerCase().includes(search)
+      (p.serialNumber || '').toLowerCase().includes(search)
     ).slice(0, 8);
-  }, [productSearch]);
+  }, [cacheFilteredProducts, productSearch]);
+
+  // "No results" only after the query resolved with strictly empty arrays.
+  const showNoProducts = filteredProducts.length === 0 && !isSearchingProducts;
+  const showNoCustomers = filteredCustomers.length === 0 && !isSearchingCustomers;
+  const isLoadingCacheCustomers = isLoadingCustomers;
+  const isLoadingCacheProducts = isLoadingProducts;
 
   // Load quotation data when editing or duplicating
   useEffect(() => {
@@ -1025,15 +1090,16 @@ export const QuotationForm: React.FC = () => {
                             </button>
                           ))}
                         </>
-                      ) : isSearchingCustomers ? (
-                        <div className={`px-4 py-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Searching customers...
+                      ) : isSearchingCustomers || isLoadingCacheCustomers ? (
+                        <div className={`px-4 py-3 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <Search className="w-4 h-4 animate-spin" />
+                          Searching...
                         </div>
-                      ) : (
+                      ) : showNoCustomers ? (
                         <div className={`px-4 py-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                           No customers found for "{customerSearch}".
                         </div>
-                      )}
+                      ) : null}
                       {customerSearch.trim() && (
                       <button
                         type="button"
@@ -1223,11 +1289,16 @@ export const QuotationForm: React.FC = () => {
                           </span>
                         </button>
                       ))
-                    ) : (
+                    ) : isSearchingProducts || isLoadingCacheProducts ? (
+                      <div className={`px-4 py-3 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <Search className="w-4 h-4 animate-spin" />
+                        Searching...
+                      </div>
+                    ) : showNoProducts ? (
                       <div className={`px-4 py-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                         No products found
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>

@@ -29,7 +29,7 @@ export const Register: React.FC = () => {
   ];
 
   useEffect(() => {
-    if (isAuthenticated && !isLoading) navigate('/dashboard', { replace: true });
+    if (isAuthenticated && !isLoading) navigate('/system/dashboard', { replace: true });
   }, [isAuthenticated, isLoading, navigate]);
 
   useEffect(() => { return () => clearError(); }, [clearError]);
@@ -58,7 +58,7 @@ export const Register: React.FC = () => {
     setIsSubmitting(true);
     try {
       await register({ name: formData.name, email: formData.email, password: formData.password });
-      navigate('/dashboard', { replace: true });
+      navigate('/system/dashboard', { replace: true });
     } catch { /* handled by context */ } finally {
       setIsSubmitting(false);
     }

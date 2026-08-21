@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { Building2 } from 'lucide-react';
+import { useShopBranding } from '../contexts/ShopBrandingContext';
 
 interface EstimateItem {
   id: string;
@@ -38,6 +39,7 @@ interface EstimateBranding {
   address?: string;
   phone?: string;
   email?: string;
+  website?: string;
 }
 
 interface PrintableEstimateProps {
@@ -47,13 +49,22 @@ interface PrintableEstimateProps {
 
 export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimateProps>(
   ({ estimate, branding }, ref) => {
+    // Dynamic branding from ShopBrandingContext with prop overrides
+    const { branding: contextBranding } = useShopBranding();
+    const activeBranding = branding ?? contextBranding;
+
     // Use branding values with fallbacks
-    const shopName = branding?.name || 'Eco System';
-    const shopSubName = branding?.subName || '';
-    const hasCustomLogo = !!branding?.logo;
-    const shopLogo = branding?.logo || '/logo.png';
-    const shopPhone = branding?.phone || '011-2345678 | 077-1234567';
-    const shopEmail = branding?.email || 'info@ecosystem.lk';
+    const shopName = activeBranding?.name || 'Eco System';
+    const shopSubName = activeBranding?.subName || '';
+    const hasCustomLogo = !!activeBranding?.logo;
+    const shopLogo = activeBranding?.logo || '/logo.png';
+    const shopPhone = activeBranding?.phone || '011-2345678 | 077-1234567';
+    const shopEmail = activeBranding?.email || 'info@ecosystem.lk';
+    const shopAddress = activeBranding?.address || '';
+    const shopWebsite = activeBranding?.website || 'www.ecosystem.lk';
+
+    // Sanitize estimate number - strip any existing EST- prefix to avoid doubles
+    const sanitizedEstimateNumber = estimate.estimateNumber.replace(/^EST-EST-/i, 'EST-');
 
     const formatDate = (dateString: string) => {
       return new Date(dateString).toLocaleDateString('en-GB', {
@@ -64,8 +75,30 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
     };
 
     const formatCurrency = (amount: number) => {
-      return `LKR ${amount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}`;
+      const n = Number(amount) || 0;
+      return `LKR ${n.toLocaleString('en-LK', { minimumFractionDigits: 2 })}`;
     };
+
+    // Strict numeric sanitization to prevent string-concatenation bugs
+    const toNum = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isNaN(n) ? 0 : n;
+    };
+
+    const itemTotals = estimate.items.reduce((sum, item) => {
+      const qty = toNum(item.quantity || 1);
+      const price = toNum(item.unitPrice || 0);
+      const lineTotal = toNum(item.total) || (qty * price);
+      return sum + lineTotal;
+    }, 0);
+
+    const discountPercent = toNum(estimate.discountPercent);
+    const taxPercent = toNum(estimate.taxPercent);
+    const subtotal = toNum(estimate.subtotal) || itemTotals;
+    const discountAmount = (subtotal * discountPercent) / 100;
+    const afterDiscount = subtotal - discountAmount;
+    const taxAmount = (afterDiscount * taxPercent) / 100;
+    const grandTotal = subtotal - discountAmount + taxAmount;
 
     return (
       <div ref={ref} className="print-estimate">
@@ -114,6 +147,8 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
             font-size: 9pt;
             line-height: 1.4;
             box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
 
           /* HEADER - INK EFFICIENT */
@@ -136,8 +171,17 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
             width: 55px;
             height: 55px;
             border-radius: 8px;
-            object-fit: cover;
             border: 2px solid #000;
+            overflow: hidden;
+            object-fit: cover;
+          }
+
+          .company-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
 
           .company-info h1 {
@@ -294,7 +338,9 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
           }
 
           .items-table thead {
-            background: white;
+            background: #f5f5f5;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
 
           .items-table th {
@@ -307,6 +353,9 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
             letter-spacing: 0.5px;
             border-bottom: 2px solid #000;
             border-right: 1px solid #000;
+            background: #e8e8e8;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
 
           .items-table th:last-child {
@@ -427,7 +476,9 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
           }
 
           .summary-row.total {
-            background: white;
+            background: #f5f5f5;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
             padding: 12px;
             border-top: 2px solid #000;
           }
@@ -560,7 +611,7 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
           </div>
           <div className="estimate-number-box">
             <div className="label">Estimate No</div>
-            <div className="number">{estimate.estimateNumber}</div>
+            <div className="number">{sanitizedEstimateNumber}</div>
             <div className="date">Date: {formatDate(estimate.estimateDate)}</div>
           </div>
         </div>
@@ -666,23 +717,23 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
           <div className="summary-box">
             <div className="summary-row">
               <span className="label">Subtotal</span>
-              <span className="value">{formatCurrency(estimate.subtotal)}</span>
+              <span className="value">{formatCurrency(subtotal)}</span>
             </div>
-            {estimate.discountAmount > 0 && (
+            {discountAmount > 0 && (
               <div className="summary-row discount">
-                <span className="label">Discount ({estimate.discountPercent}%)</span>
-                <span className="value">-{formatCurrency(estimate.discountAmount)}</span>
+                <span className="label">Discount ({discountPercent}%)</span>
+                <span className="value">-{formatCurrency(discountAmount)}</span>
               </div>
             )}
-            {estimate.taxAmount > 0 && (
+            {taxAmount > 0 && (
               <div className="summary-row tax">
-                <span className="label">Tax ({estimate.taxPercent}%)</span>
-                <span className="value">+{formatCurrency(estimate.taxAmount)}</span>
+                <span className="label">Tax ({taxPercent}%)</span>
+                <span className="value">+{formatCurrency(taxAmount)}</span>
               </div>
             )}
             <div className="summary-row total">
               <span className="label">Grand Total</span>
-              <span className="value">{formatCurrency(estimate.total)}</span>
+              <span className="value">{formatCurrency(grandTotal)}</span>
             </div>
           </div>
         </div>
@@ -721,7 +772,7 @@ export const PrintableEstimate = forwardRef<HTMLDivElement, PrintableEstimatePro
         <div className="estimate-footer">
           <div className="footer-message">Thank you for considering Eco System!</div>
           <div className="footer-contact">
-            No. 123, Galle Road, Colombo 03 | www.ecosystem.lk
+            {shopAddress ? `${shopAddress} | ` : ''}{shopWebsite}
           </div>
           <div className="footer-disclaimer">
             This is a price estimate only. Final prices may vary based on availability and market conditions. 

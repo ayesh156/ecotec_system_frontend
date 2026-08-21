@@ -41,7 +41,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { theme, toggleTheme, aiAutoFillEnabled, toggleAiAutoFill } = useTheme();
   const { user, logout } = useAuth();
   const { branding } = useShopBranding();
-  const { isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, isLoading: sectionsLoading } = useShopSections();
+  const { isSectionHidden, hiddenSections, isLoading: sectionsLoading } = useShopSections();
   const { invoices: cachedInvoices, customers: cachedCustomers, loadInvoices, loadCustomers, invoicesLoaded, customersLoaded } = useDataCache();
   const location = useLocation();
   const navigate = useNavigate();
@@ -266,40 +266,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   ];
 
   // Regular shop navigation - for ADMIN, MANAGER, STAFF
+  // Parent dropdowns auto-collapse when all their child sub-items are hidden.
   const shopNavItems: NavItem[] = [
+    // Dashboard (always visible - guarded in ShopSectionsContext)
     { path: '/system', icon: LayoutDashboard, label: 'Dashboard', badge: null },
     { path: '/system/invoices', icon: FileText, label: 'Invoices', badge: invoicesPendingCount > 0 ? String(invoicesPendingCount) : null },
-    {
-      path: '/system/job-notes',
-      icon: ClipboardList,
-      label: 'Job Notes',
-      badge: null,
-      subItems: [
-        { path: '/system/job-notes', icon: ClipboardList, label: 'All Job Notes', badge: pendingJobNotesCount > 0 ? String(pendingJobNotesCount) : null },
-        { path: '/system/technicians', icon: Wrench, label: 'Technicians' },
-      ]
-    },
-    {
-      path: '/system/products',
-      icon: Package,
-      label: 'Products',
-      badge: null,
-      subItems: [
-        { path: '/system/products', icon: Package, label: 'All Products' },
-        { path: '/system/categories', icon: FolderTree, label: 'Categories' },
-        { path: '/system/brands', icon: Building, label: 'Brands' },
-      ]
-    },
-    {
-      path: '/system/services',
-      icon: Wrench,
-      label: 'Services',
-      badge: null,
-      subItems: [
-        { path: '/system/services', icon: Wrench, label: 'All Services' },
-        { path: '/system/service-categories', icon: Layers, label: 'Service Categories' },
-      ]
-    },
+    // Pricing Proposals (Active module)
     {
       path: '/system/pricing-proposals',
       icon: Calculator,
@@ -310,10 +282,56 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         { path: '/system/estimates', icon: FileText, label: 'Estimates' },
       ]
     },
-    { path: '/system/warranties', icon: Shield, label: 'Warranties', badge: '3' },
+    // Products & Inventory (Active module)
+    {
+      path: '/system/products',
+      icon: Package,
+      label: 'Products & Inventory',
+      badge: null,
+      subItems: [
+        { path: '/system/products', icon: Package, label: 'All Products' },
+        { path: '/system/categories', icon: FolderTree, label: 'Categories' },
+        { path: '/system/brands', icon: Building, label: 'Brands' },
+      ]
+    },
+    // Customers (Active module)
     { path: '/system/customers', icon: Users, label: 'Customers', badge: overdueCustomersCount > 0 ? String(overdueCustomersCount) : null },
-    { path: '/system/suppliers', icon: Truck, label: 'Suppliers', badge: '2' },
-    { path: '/system/grn', icon: ClipboardCheck, label: 'GRN', badge: null },
+    // Procurement (Active module)
+    {
+      path: '/system/suppliers',
+      icon: Truck,
+      label: 'Procurement',
+      badge: null,
+      subItems: [
+        { path: '/system/suppliers', icon: Truck, label: 'Suppliers', badge: '2' },
+        { path: '/system/grn', icon: ClipboardCheck, label: 'Goods Received Notes' },
+      ]
+    },
+    // Job Notes (Pending mock module - hidden by default until enabled)
+    {
+      path: '/system/job-notes',
+      icon: ClipboardList,
+      label: 'Job Notes',
+      badge: null,
+      subItems: [
+        { path: '/system/job-notes', icon: ClipboardList, label: 'All Job Notes', badge: pendingJobNotesCount > 0 ? String(pendingJobNotesCount) : null },
+        { path: '/system/technicians', icon: Wrench, label: 'Technicians' },
+      ]
+    },
+    // Services (Pending mock module - hidden by default until enabled)
+    {
+      path: '/system/services',
+      icon: Wrench,
+      label: 'Services',
+      badge: null,
+      subItems: [
+        { path: '/system/services', icon: Wrench, label: 'All Services' },
+        { path: '/system/service-categories', icon: Layers, label: 'Service Categories' },
+      ]
+    },
+    // Warranties (Pending mock module - hidden by default until enabled)
+    { path: '/system/warranties', icon: Shield, label: 'Warranties', badge: '3' },
+    // Cash Management (Pending mock module - hidden by default until enabled)
     {
       path: '/system/cash-management',
       icon: Wallet,
@@ -325,7 +343,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         { path: '/system/cash-management/insights', icon: TrendingUp, label: 'Financial Insights' },
       ]
     },
+    // Reports (Pending mock module - hidden by default until enabled)
     { path: '/system/reports', icon: TrendingUp, label: 'Reports', badge: null },
+    // Productivity (Active module)
     {
       path: '/system/productivity',
       icon: Lightbulb,
@@ -338,78 +358,79 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     },
   ];
 
+  // Direct URL protection: redirect to Dashboard when navigating directly
+  // to a hidden section route. Applies to ALL shop users including ADMIN
+  // (no role bypass for SuperAdmin-hidden sections).
+  const shopNavPaths = useMemo(() =>
+    shopNavItems.flatMap(item =>
+      item.subItems ? [item.path, ...item.subItems.map(s => s.path)] : [item.path]
+    ), []);
+  useEffect(() => {
+    if (sectionsLoading) return;
+    const isSuperAdminEcosystem = user?.role === 'SUPER_ADMIN' && !user?.shop;
+    if (isSuperAdminEcosystem) return;
+
+    // Dashboard (root fallback) must ALWAYS remain accessible. Never redirect
+    // `/system`, `/system/`, or `/system/dashboard` away, and never target them
+    // as a redirect destination loop. This prevents infinite spinner/redirect
+    // loops when the Dashboard section is (mistakenly) marked hidden.
+    const isDashboardPath =
+      location.pathname === '/system' ||
+      location.pathname === '/system/' ||
+      location.pathname === '/system/dashboard';
+
+    if (isDashboardPath) return;
+
+    const onHiddenRoute = shopNavPaths.some(p =>
+      (location.pathname === p || location.pathname.startsWith(p + '/')) && isSectionHidden(p)
+    );
+    if (onHiddenRoute) {
+      navigate('/system/dashboard', { replace: true });
+    }
+  }, [location.pathname, sectionsLoading, isSectionHidden, user?.role, user?.shop, hiddenSections, shopNavPaths]);
+
   // Select navigation based on user role
   const rawNavItems: NavItem[] = (user?.role === 'SUPER_ADMIN') 
     ? superAdminNavItems 
     : shopNavItems;
 
-  // Check if user can manage sections
-  const isShopAdmin = user?.role === 'ADMIN';
-  const canManageSections = isShopAdmin;
 
-  // Filter out hidden sections from navigation
-  // For SuperAdmin viewing a shop OR Shop ADMIN: show all sections but mark hidden ones with badge
-  // For regular users: filter out hidden sections completely
-  // For SuperAdmin/Shop ADMIN: Show all with appropriate badges
+  // Key-match a nav item against the reactive hidden section lists.
+  // Delegates to isSectionHidden() which applies BOTH SuperAdmin-hidden and
+  // Admin-hidden sections universally to all shop users (no role bypass).
+  const isHidden = (item: { path?: string; href?: string; id?: string }) => {
+    return isSectionHidden(item.path || item.href || item.id || '');
+  };
+
+  // Filter out hidden sections from navigation.
+  // Sections configured in the Section Control Center apply dynamically to ALL
+  // shop navigation regardless of role (no ADMIN/SUPER_ADMIN bypass), so
+  // `isSectionHidden` handles both SuperAdmin and Admin hidden lists.
   const navItems = useMemo(() => {
-    console.log('🔄 Recalculating navItems.');
-    console.log('User role:', user?.role);
-    console.log('Can manage sections:', canManageSections);
-    console.log('Hidden sections (SuperAdmin):', hiddenSections);
-    console.log('Admin hidden sections:', adminHiddenSections);
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     
-    const isShopAdmin = user?.role === 'ADMIN';
+    // SUPER_ADMIN without a shop (ecosystem view) sees their own admin nav untouched
+    if (isSuperAdmin && !user?.shop) {
+      return rawNavItems;
+    }
     
-    if (false) {
-      // SuperAdmin viewing shop: disabled
-      return rawNavItems.map(item => {
-        const itemDisabled = isSuperAdminHidden(item.path);
-        console.log(`SuperAdmin - Item ${item.path} - Hidden: ${itemDisabled}`);
-        return {
-          ...item,
-          isDisabled: itemDisabled,
-          subItems: item.subItems?.map(sub => ({
-            ...sub,
-            isDisabled: isSuperAdminHidden(sub.path)
-          }))
-        };
-      });
-    } else if (isShopAdmin) {
-      // Shop ADMIN: show sections NOT hidden by SuperAdmin, mark Admin-hidden as disabled
-      return rawNavItems
-        .filter(item => !isSuperAdminHidden(item.path)) // Filter out SuperAdmin hidden
-        .map(item => {
-          const itemDisabled = isAdminHidden(item.path); // Mark Admin-hidden as disabled
-          console.log(`Shop ADMIN - Item ${item.path} - Hidden from users: ${itemDisabled}`);
+    // All shop users (ADMIN/MANAGER/STAFF) respect both hidden lists strictly.
+    
+    return rawNavItems
+      .filter(item => !isHidden(item))
+      .map(item => {
+        if (item.subItems) {
           return {
             ...item,
-            isDisabled: itemDisabled,
-            subItems: item.subItems
-              ?.filter(sub => !isSuperAdminHidden(sub.path)) // Filter out SuperAdmin hidden
-              ?.map(sub => ({
-                ...sub,
-                isDisabled: isAdminHidden(sub.path) // Mark Admin-hidden as disabled
-              }))
+            // Only show sub-items that are not hidden
+            subItems: item.subItems.filter(sub => !isHidden(sub))
           };
-        })
-        .filter(item => !item.subItems || item.subItems.length > 0);
-    } else {
-      // Regular users: filter out ALL hidden sections (both SuperAdmin and Admin hidden)
-      return rawNavItems
-        .filter(item => !isSectionHidden(item.path))
-        .map(item => {
-          if (item.subItems) {
-            return {
-              ...item,
-              subItems: item.subItems.filter(sub => !isSectionHidden(sub.path))
-            };
-          }
-          return item;
-        })
-        // Remove parent items that have no visible sub-items
-        .filter(item => !item.subItems || item.subItems.length > 0);
-    }
-  }, [rawNavItems, isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, canManageSections, user?.role]);
+        }
+        return item;
+      })
+      // Remove parent items that have no visible sub-items
+      .filter(item => !item.subItems || item.subItems.length > 0);
+  }, [rawNavItems, user?.role, user?.shop, isSectionHidden, isHidden]);
 
   // Bottom nav items - different for SUPER_ADMIN (when not viewing shop)
   // Shop Admin features (Users, Branding, Sections) are now inside Settings page for both SHOP_ADMIN and SUPER_ADMIN viewing a shop
@@ -425,57 +446,32 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           { path: '/system/help', icon: HelpCircle, label: 'Help Center', badge: null },
         ];
 
-  // Filter hidden sections from bottom nav items
+  // Filter hidden sections from bottom nav items.
+  // Sections configured in the Section Control Center apply universally to
+  // ALL shop navigation regardless of role (both hidden lists handled by
+  // `isSectionHidden`).
   const bottomNavItems = useMemo(() => {
-    const isShopAdmin = user?.role === 'ADMIN';
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     
-    if (false) {
-      // SuperAdmin viewing shop: disabled
-      return rawBottomNavItems.map(item => {
-        const itemDisabled = isSuperAdminHidden(item.path);
-        return {
-          ...item,
-          isDisabled: itemDisabled,
-          subItems: item.subItems?.map(sub => ({
-            ...sub,
-            isDisabled: isSuperAdminHidden(sub.path)
-          }))
-        };
-      });
-    } else if (isShopAdmin) {
-      // Shop ADMIN: filter SuperAdmin-hidden, mark Admin-hidden as disabled
-      return rawBottomNavItems
-        .filter(item => !isSuperAdminHidden(item.path))
-        .map(item => {
-          const itemDisabled = isAdminHidden(item.path);
+    // SUPER_ADMIN ecosystem view uses its own bottom nav untouched
+    if (isSuperAdmin && !user?.shop) {
+      return rawBottomNavItems;
+    }
+    
+    return rawBottomNavItems
+      .filter(item => !isHidden(item))
+      .map(item => {
+        if (item.subItems) {
           return {
             ...item,
-            isDisabled: itemDisabled,
-            subItems: item.subItems
-              ?.filter(sub => !isSuperAdminHidden(sub.path))
-              ?.map(sub => ({
-                ...sub,
-                isDisabled: isAdminHidden(sub.path)
-              }))
+            subItems: item.subItems.filter(sub => !isHidden(sub))
           };
-        })
-        .filter(item => !item.subItems || item.subItems.length > 0);
-    } else {
-      // Regular users: filter out ALL hidden sections
-      return rawBottomNavItems
-        .filter(item => !isSectionHidden(item.path))
-        .map(item => {
-          if (item.subItems) {
-            return {
-              ...item,
-              subItems: item.subItems.filter(sub => !isSectionHidden(sub.path))
-            };
-          }
-          return item;
-        })
-        .filter(item => !item.subItems || item.subItems.length > 0);
-    }
-  }, [rawBottomNavItems, isSectionHidden, isSuperAdminHidden, isAdminHidden, hiddenSections, adminHiddenSections, canManageSections, user?.role]);
+        }
+        return item;
+      })
+      // Remove parent items that have no visible sub-items
+      .filter(item => !item.subItems || item.subItems.length > 0);
+  }, [rawBottomNavItems, user?.role, user?.shop, isSectionHidden, isHidden]);
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isExactActive = (path: string) => location.pathname === path;
@@ -1426,26 +1422,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               </div>
             </div>
 
-            {/* Center - Ecosystem Branding (hidden for SUPER_ADMIN) */}
-            {user?.role !== 'SUPER_ADMIN' ? (
-              <div className="hidden md:flex flex-1 items-center justify-center">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
-                    <img src="logo.png" alt="Eco System" className="w-full h-full object-contain" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className={`text-base font-bold tracking-wide leading-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                      Eco System
-                    </span>
-                    <span className={`text-[9px] -mt-0.5 tracking-wider uppercase ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
-                      NEBULAINFINITE
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1" />
-            )}
+            {/* Center spacer - branding removed */}
+            <div className="flex-1" />
 
             {/* Right side */}
             <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3">
