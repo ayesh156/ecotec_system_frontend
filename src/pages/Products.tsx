@@ -2368,8 +2368,8 @@ export const Products: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   {selectedProductForPricing.image ? (
-                    <img 
-                      src={selectedProductForPricing.image} 
+                    <img
+                      src={getImageUrl(selectedProductForPricing.image)}
                       alt={selectedProductForPricing.name}
                       className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover flex-shrink-0"
                     />

@@ -125,7 +125,31 @@ export const ProductForm: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [pasteSuccess, setPasteSuccess] = useState(false);
-  
+  // Local object URL for instant preview before the upload finishes
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  // Persisted image URL returned by the backend (locked source of truth for formData.image)
+  const [imageUrl, setImageUrl] = useState<string>('');
+
+  // Show a local preview immediately, before the async upload & AI analysis finish
+  const showLocalPreview = useCallback((file: File) => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+    }
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setPreviewUrl(url);
+  }, []);
+
+  // Revoke the object URL when the form unmounts
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
+
   // API State for categories and brands
   const [apiCategories, setApiCategories] = useState<APICategory[]>([]);
   const [apiBrands, setApiBrands] = useState<APIBrand[]>([]);
@@ -184,8 +208,16 @@ export const ProductForm: React.FC = () => {
             const product = await productService.getById(id, currentShopId || undefined);
             setExistingProduct(product);
             
+            // Lock image state so existing images display on load (Edit mode hydration)
+            const existingImage = product.image || '';
+            setImageUrl(existingImage);
+            // Resolve the stored path into a displayable URL (blob preview / absolute URL / backend path)
+            setPreviewUrl(existingImage ? getImageUrl(existingImage) : null);
+            
             // Populate form with product data
-            setFormData({
+            setFormData(prev => ({
+              ...prev,
+              image: existingImage,
               name: product.name || '',
               serialNumber: product.serialNumber || generateSerialNumber(),
               barcode: product.barcode || '',
@@ -196,10 +228,9 @@ export const ProductForm: React.FC = () => {
               sellingPrice: product.price || 0,
               stock: product.stock || 0,
               description: product.description || '',
-              image: product.image || '',
               warranty: product.warranty || '',
               lowStockThreshold: product.lowStockThreshold || 10,
-            });
+            }));
           } catch (err) {
             console.error('Failed to load product:', err);
             setApiError('Failed to load product details');
@@ -232,6 +263,9 @@ export const ProductForm: React.FC = () => {
 
   // Handle image upload with compression and Supabase upload (required)
   const handleImageUpload = useCallback(async (file: File) => {
+    // Instantly show the local image preview (blob URL)
+    showLocalPreview(file);
+
     // Helper function to calculate string similarity (0-1)
     const calculateSimilarity = (str1: string, str2: string): number => {
       const s1 = str1.toLowerCase().trim();
@@ -328,8 +362,9 @@ export const ProductForm: React.FC = () => {
       setUploadProgress(60);
       const uploadResult = await uploadProductImage(compressedResult.file);
       
-      // Step 3: Set the image URL in form data
+      // Step 3: Lock the backend URL in BOTH state and form data so upload persists
       setUploadProgress(100);
+      setImageUrl(uploadResult.url);
       setFormData(prev => ({ ...prev, image: uploadResult.url }));
       
       // Step 4: Analyze image with Gemini Vision to extract product details (if enabled)
@@ -513,7 +548,7 @@ export const ProductForm: React.FC = () => {
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, [isEditing, aiAutoFillEnabled, apiBrands, apiCategories]);
+  }, [isEditing, aiAutoFillEnabled, apiBrands, apiCategories, showLocalPreview]);
 
   // Handle file input change
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -899,6 +934,8 @@ export const ProductForm: React.FC = () => {
 
   // Remove image
   const handleRemoveImage = () => {
+    setImageUrl('');
+    setPreviewUrl(null);
     setFormData(prev => ({ ...prev, image: '' }));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -1014,6 +1051,9 @@ export const ProductForm: React.FC = () => {
         }
       }
 
+      // Always prefer the locked backend image URL (persisted source of truth)
+      const finalImage = imageUrl || formData.image || '';
+
       const productData: CreateProductDTO = {
         name: formData.name.trim(),
         price: formData.sellingPrice || formData.price,
@@ -1025,7 +1065,7 @@ export const ProductForm: React.FC = () => {
         barcode: formData.barcode.trim() || undefined,
         warranty: formData.warranty || undefined,
         warrantyMonths,
-        image: formData.image || undefined,
+        image: finalImage || undefined,
         categoryId,
         brandId,
       };
@@ -1276,7 +1316,7 @@ export const ProductForm: React.FC = () => {
                 theme === 'dark' ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50'
               }`}>
                 <img 
-                  src={getImageUrl(formData.image)} 
+                  src={getImageUrl(previewUrl || imageUrl || formData.image)} 
                   alt="Product preview" 
                   className="w-full h-48 object-contain"
                 />

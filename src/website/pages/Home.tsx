@@ -18,6 +18,7 @@ import {
   CheckCircle,
 } from '@mui/icons-material';
 import ProductCard from '../components/ProductCard';
+import { getImageUrl } from '../../lib/utils';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
@@ -41,7 +42,7 @@ const DEFAULT_CATEGORY_IMAGE = 'https://images.unsplash.com/photo-1526738549149-
 
 function getCategoryImage(category: PublicCategory): string {
   if (category.image && category.image.trim() !== '') {
-    return category.image;
+    return getImageUrl(category.image);
   }
   const key = category.name.toLowerCase();
   return CATEGORY_FALLBACK_IMAGES[key] || DEFAULT_CATEGORY_IMAGE;
@@ -81,7 +82,7 @@ function toCardProduct(p: PublicProduct) {
     originalPrice: p.costPrice ? p.costPrice * 1.3 : p.price,
     rating: 0,
     reviews: 0,
-    image: p.image || '/placeholder-product.png',
+    image: getImageUrl(p.image) || '/placeholder-product.png',
     badge: p.stock > 5 ? undefined : (p.stock > 0 ? 'Low Stock' : 'Out of Stock'),
     specs: p.description ? [p.description.slice(0, 40)] : (brandName ? [brandName] : undefined),
     inStock: p.stock > 0,

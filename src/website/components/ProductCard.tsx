@@ -17,6 +17,7 @@ import {
 } from '@mui/icons-material';
 import { formatPrice, calcDiscount } from '../data/products';
 import { useCart } from '../context/CartContext';
+import { getImageUrl } from '../../lib/utils';
 
 interface Product {
   id: number;
@@ -75,7 +76,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
 
   const imageSrc = !product.image || imageError
     ? getFallbackImage(product.category)
-    : product.image;
+    : getImageUrl(product.image);
 
   return (
     <Card

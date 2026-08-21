@@ -17,6 +17,7 @@ import {
 } from '@mui/icons-material';
 import { useCart } from '../context/CartContext';
 import { formatPrice, storeInfo } from '../data/products';
+import { getImageUrl } from '../../lib/utils';
 
 export default function CartDrawer() {
   const {
@@ -161,7 +162,7 @@ export default function CartDrawer() {
                   }}
                 >
                   <Avatar
-                    src={item.image}
+                    src={item.image ? getImageUrl(item.image) : undefined}
                     variant="rounded"
                     sx={{
                       width: 72,

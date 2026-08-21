@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -16,6 +16,8 @@ import {
 } from '@mui/material';
 import { Search, FilterList } from '@mui/icons-material';
 import ProductCard from '../components/ProductCard';
+import { getImageUrl } from '../../lib/utils';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
 interface PublicCategory {
@@ -52,7 +54,7 @@ function toCardProduct(p: PublicProduct) {
     originalPrice: p.costPrice ? p.costPrice * 1.3 : p.price,
     rating: 0,
     reviews: 0,
-    image: p.image || '/placeholder-product.png',
+    image: getImageUrl(p.image) || '/placeholder-product.png',
     badge: p.stock > 5 ? undefined : (p.stock > 0 ? 'Low Stock' : 'Out of Stock'),
     specs: p.description ? [p.description.slice(0, 40)] : (brandName ? [brandName] : undefined),
     inStock: p.stock > 0,
@@ -74,6 +76,8 @@ export default function Products() {
   const [categories, setCategories] = useState<PublicCategory[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  // Increments with each request so slow responses never overwrite newer ones
+  const requestIdRef = useRef(0);
 
   // Fetch categories & brands once
   useEffect(() => {
@@ -92,31 +96,34 @@ export default function Products() {
     });
   }, []);
 
-  // Fetch products whenever filters change
+  // Fetch products whenever filters change. Force fresh data from the
+  // backend (never stale cache) so newly added products appear on refresh.
   useEffect(() => {
     setLoading(true);
+    const requestId = ++requestIdRef.current;
     const params = new URLSearchParams();
     if (activeCategory !== 'all') params.set('categoryId', activeCategory);
     if (searchQuery) params.set('search', searchQuery);
+    params.set('_t', String(Date.now())); // bust any HTTP cache
     params.set('limit', '100');
 
-    fetch(`${API_BASE_URL}/public/products?${params.toString()}`)
+    fetch(`${API_BASE_URL}/public/products?${params.toString()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(res => {
-        if (res.success) {
-          setProducts(res.data);
-        } else {
-          setProducts([]);
-        }
+        if (requestId !== requestIdRef.current) return; // stale response
+        setProducts(res.success ? res.data : []);
       })
       .catch(err => {
+        if (requestId !== requestIdRef.current) return;
         console.error('Failed to load products:', err);
         setProducts([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
   }, [activeCategory, searchQuery]);
 
-  const handleCategoryChange = (categoryId: string) => {
+  const handleCategoryChange = useCallback((categoryId: string) => {
     setActiveCategory(categoryId);
     setPage(1);
     if (categoryId === 'all') {
@@ -125,16 +132,15 @@ export default function Products() {
       searchParams.set('category', categoryId);
     }
     setSearchParams(searchParams);
-  };
+  }, [searchParams, setSearchParams]);
 
   const filteredProducts = useMemo(() => {
     // Convert POS products to card-compatible format
     let result = products.map(toCardProduct);
 
-    // Category filtering is already done server-side, but double-check
-    if (activeCategory !== 'all') {
-      result = result.filter(p => p.category === activeCategory);
-    }
+    // Category filtering is already handled server-side via ?categoryId=,
+    // so we must NOT re-filter client-side. Doing so compared a slug
+    // (e.g. "processors") against a UUID, which always failed for new products.
 
     switch (sortBy) {
       case 'price-asc':
@@ -151,7 +157,7 @@ export default function Products() {
     }
 
     return result;
-  }, [products, activeCategory, sortBy]);
+  }, [products, sortBy]);
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const paginatedProducts = filteredProducts.slice(
