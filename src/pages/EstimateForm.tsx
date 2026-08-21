@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { mockCustomers, mockProducts, mockEstimates } from '../data/mockData';
-import type { Customer, Product } from '../data/mockData';
+import { toast } from 'sonner';
+import { fetchWithAuth, handleAuthResponse, getAuthHeaders } from '../lib/fetchWithAuth';
+import { estimateService, convertAPIEstimateToFrontend, type CreateEstimateData } from '../services/estimateService';
+import type { FrontendEstimate, FrontendEstimateItem } from '../services/estimateService';
+import type { Product } from '../data/mockData';
+import { customerService } from '../services/customerService';
 import { PrintableEstimate } from '../components/PrintableEstimate';
 import {
   ArrowLeft, Save, Printer, User, Phone, Mail, MapPin,
@@ -150,26 +154,52 @@ export const EstimateForm: React.FC = () => {
   // Preview State
   const [showPreview, setShowPreview] = useState(false);
 
+  // Live customer data from backend API
+  const [customers, setCustomers] = useState<any[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetchWithAuth(import.meta.env.VITE_API_URL + '/customers?limit=200', { headers: getAuthHeaders() });
+        const json = await handleAuthResponse<{ data: any[] }>(res);
+        setCustomers(Array.isArray(json) ? json : (json.data || []));
+      } catch { /* silent */ }
+    };
+    load();
+  }, []);
+
+  // Live product data from backend API
+  const [products, setProducts] = useState<any[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetchWithAuth(import.meta.env.VITE_API_URL + '/products?limit=200', { headers: getAuthHeaders() });
+        const json = await handleAuthResponse<{ data: any[] }>(res);
+        setProducts(Array.isArray(json) ? json : (json.data || []));
+      } catch { /* silent */ }
+    };
+    load();
+  }, []);
+
   // Filter customers for search
   const filteredCustomers = useMemo(() => {
     if (!customerSearch) return [];
     const search = customerSearch.toLowerCase();
-    return mockCustomers.filter(c =>
+    return customers.filter((c: any) =>
       c.name.toLowerCase().includes(search) ||
       c.phone.includes(search) ||
       c.email?.toLowerCase().includes(search)
     ).slice(0, 5);
-  }, [customerSearch]);
+  }, [customerSearch, customers]);
 
   // Filter products for search
   const filteredProducts = useMemo(() => {
     if (!productSearch) return [];
     const search = productSearch.toLowerCase();
-    return mockProducts.filter(p =>
+    return products.filter((p: any) =>
       p.name.toLowerCase().includes(search) ||
       p.serialNumber?.toLowerCase().includes(search)
     ).slice(0, 8);
-  }, [productSearch]);
+  }, [productSearch, products]);
 
   // Load estimate data when editing or duplicating (MUST RUN FIRST)
   useEffect(() => {
@@ -211,39 +241,51 @@ export const EstimateForm: React.FC = () => {
     // Handle edit/view mode
     if (isEditing && id) {
       setIsLoadingEstimate(true);
-      const estimate = mockEstimates.find(e => e.id === id);
-      if (estimate) {
-        setFormData({
-          customerId: estimate.customerId || '',
-          customerName: estimate.customerName,
-          customerPhone: estimate.customerPhone,
-          customerEmail: estimate.customerEmail || '',
-          customerAddress: estimate.customerAddress || '',
-          isNewCustomer: false,
-          estimateDate: estimate.estimateDate,
-          expiryDate: estimate.expiryDate,
-          validityDays: Math.ceil((new Date(estimate.expiryDate).getTime() - new Date(estimate.estimateDate).getTime()) / (1000 * 60 * 60 * 24)),
-          items: estimate.items,
-          subtotal: estimate.subtotal,
-          discountPercent: estimate.discountPercent,
-          discountAmount: estimate.discountAmount,
-          taxPercent: estimate.taxPercent,
-          taxAmount: estimate.taxAmount,
-          total: estimate.total,
-          notes: estimate.notes || '',
-          terms: estimate.terms || '',
-          internalNotes: estimate.internalNotes || '',
-        });
-        // Set customer search to show selected customer
-        setCustomerSearch(estimate.customerName);
-        
-        // If view mode, show preview automatically
-        if (isViewMode) {
-          setTimeout(() => setShowPreview(true), 200);
+      (async () => {
+        try {
+          const apiEstimate = await estimateService.getById(id);
+          const estimate = convertAPIEstimateToFrontend(apiEstimate);
+          setFormData({
+            customerId: estimate.customerId || '',
+            customerName: estimate.customerName,
+            customerPhone: estimate.customerPhone,
+            customerEmail: estimate.customerEmail || '',
+            customerAddress: estimate.customerAddress || '',
+            isNewCustomer: false,
+            estimateDate: estimate.estimateDate,
+            expiryDate: estimate.expiryDate,
+            validityDays: Math.ceil((new Date(estimate.expiryDate).getTime() - new Date(estimate.estimateDate).getTime()) / (1000 * 60 * 60 * 24)),
+            items: estimate.items.map((item, idx) => ({
+              id: item.id || 'item-' + idx,
+              productId: item.productId || '',
+              productName: item.productName,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discount: item.discount,
+              total: item.total,
+            })),
+            subtotal: estimate.subtotal,
+            discountPercent: estimate.discountPercent,
+            discountAmount: estimate.discountAmount,
+            taxPercent: estimate.taxPercent,
+            taxAmount: estimate.taxAmount,
+            total: estimate.total,
+            notes: estimate.notes || '',
+            terms: estimate.terms || '',
+            internalNotes: estimate.internalNotes || '',
+          });
+          setCustomerSearch(estimate.customerName);
+          if (isViewMode) {
+            setTimeout(() => setShowPreview(true), 200);
+          }
+        } catch (error) {
+          console.error('Failed to load estimate:', error);
+          toast.error('Failed to load estimate');
+        } finally {
+          setTimeout(() => setIsLoadingEstimate(false), 100);
         }
-      }
-      // Allow a brief moment for state to settle before enabling calculations
-      setTimeout(() => setIsLoadingEstimate(false), 100);
+      })();
     }
   }, [id, isEditing, isDuplicating, isViewMode, location.state]);
 
@@ -298,7 +340,7 @@ export const EstimateForm: React.FC = () => {
   }, []);
 
   // Customer handlers
-  const handleCustomerSelect = (customer: Customer) => {
+  const handleCustomerSelect = (customer: any) => {
     setFormData(prev => ({
       ...prev,
       customerId: customer.id,
@@ -443,33 +485,87 @@ export const EstimateForm: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (status: EstimateStatus = 'draft') => {
-    if (!validateForm()) return;
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const savedEstimateIdRef = useRef<string | null>(null);
 
-    const estimate = {
-      id: isEditing ? id : Date.now().toString(),
-      estimateNumber: isEditing ? `EST-${id}` : estimateNumber,
-      customerId: formData.customerId || undefined,
-      customerName: formData.customerName,
-      customerPhone: formData.customerPhone,
-      customerEmail: formData.customerEmail || undefined,
-      customerAddress: formData.customerAddress || undefined,
-      date: formData.estimateDate,
-      expiryDate: formData.expiryDate,
-      items: formData.items,
-      subtotal: formData.subtotal,
-      discount: formData.discountAmount,
-      tax: formData.taxAmount,
-      total: formData.total,
-      status,
+  // Build the API payload with strict numeric coercion and proper enum status.
+  // customerIdOverride lets the save routine inject a freshly-created customer's
+  // real database primary key when the user added a new customer inline.
+  const buildPayload = (status: EstimateStatus = 'draft', customerIdOverride?: string): CreateEstimateData => {
+    const apiStatus: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' =
+      status === 'sent' ? 'SENT' : status === 'accepted' ? 'ACCEPTED' : status === 'rejected' ? 'REJECTED' : 'DRAFT';
+
+    return {
+      customerId: customerIdOverride || formData.customerId || '',
+      items: formData.items.map(item => ({
+        itemType: 'PRODUCT' as const,
+        ...(item.productId && item.productId !== '0' ? { productId: item.productId } : {}),
+        description: item.productName || item.description || 'Custom item',
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || 0,
+        discount: item.discount || 0,
+      })),
+      status: apiStatus,
+      discountTotal: formData.discountAmount || 0,
+      taxTotal: formData.taxAmount || 0,
+      validityDate: formData.expiryDate || undefined,
       notes: formData.notes || undefined,
       terms: formData.terms || undefined,
       internalNotes: formData.internalNotes || undefined,
-      createdAt: new Date().toISOString(),
     };
+  };
 
-    console.log('Saving Estimate:', estimate);
-    navigate('/estimates');
+  // Extract the exact API error message so the user sees what went wrong
+  const getServerErrorMessage = (error: unknown): string => {
+    if (error instanceof Error && error.message) {
+      return error.message.replace(/^Error:\s*/i, '');
+    }
+    return 'Failed to save estimate. Please check your details and try again.';
+  };
+
+  // Shared save routine: returns the persisted estimate id on success, null on failure
+  const saveCurrentEstimate = async (status: EstimateStatus = 'draft'): Promise<string | null> => {
+    if (!validateForm()) return null;
+    setIsSaving(true);
+    try {
+      // Inline customer creation: persist the customer first to get a real DB id.
+      let customerId = formData.customerId;
+      if (formData.isNewCustomer || !formData.customerId) {
+        const createdCustomer = await customerService.create({
+          name: formData.customerName.trim(),
+          phone: formData.customerPhone.trim(),
+          email: formData.customerEmail.trim() || undefined,
+          address: formData.customerAddress.trim() || undefined,
+        });
+        customerId = createdCustomer.id;
+        setFormData(prev => ({ ...prev, customerId: createdCustomer.id, isNewCustomer: false }));
+        toast.success(`New customer "${createdCustomer.name}" created successfully`);
+      }
+
+      const payload = buildPayload(status, customerId);
+      if (isEditing && id) {
+        await estimateService.update(id, payload);
+        savedEstimateIdRef.current = id;
+        toast.success('Estimate updated successfully');
+        return id;
+      }
+      const created = await estimateService.create(payload);
+      savedEstimateIdRef.current = created.id;
+      toast.success(`Estimate ${created.estimateNumber} created successfully`);
+      return created.id;
+    } catch (error) {
+      console.error('Failed to save estimate:', error);
+      toast.error(getServerErrorMessage(error), { duration: 6000 });
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSubmit = async (status: EstimateStatus = 'draft') => {
+    const savedId = await saveCurrentEstimate(status);
+    if (savedId) navigate('/estimates');
   };
 
   // Get estimate data for print/preview
@@ -492,43 +588,51 @@ export const EstimateForm: React.FC = () => {
     terms: formData.terms || undefined,
   });
 
-  // Print handler
-  const handlePrint = () => {
-    setTimeout(() => {
-      if (printRef.current) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write('<html><head><title>Estimate - ' + (isEditing ? `EST-${id}` : estimateNumber) + '</title></head><body>');
-          printWindow.document.write(printRef.current.innerHTML);
-          printWindow.document.write('</body></html>');
-          printWindow.document.close();
-          setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-          }, 250);
-        }
-      }
-    }, 100);
+  const ensureSavedForPrint = async (): Promise<string | null> => {
+    if (savedEstimateIdRef.current) return savedEstimateIdRef.current;
+    return saveCurrentEstimate('draft');
   };
 
-  // Download PDF handler
-  const handleDownloadPDF = () => {
+  const openPrintWindow = (downloadAsPdf: boolean): void => {
+    if (!printRef.current) return;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write('<html><head><title>Estimate - ' + (isEditing ? `EST-${id}` : estimateNumber) + '</title>');
+    win.document.write('<style>@media print { @page { size: A4 portrait; margin: 0; } }</style>');
+    win.document.write('</head><body>');
+    win.document.write(printRef.current.innerHTML);
+    win.document.write('</body></html>');
+    win.document.close();
     setTimeout(() => {
-      if (printRef.current) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write('<html><head><title>Estimate - ' + (isEditing ? `EST-${id}` : estimateNumber) + '</title>');
-          printWindow.document.write('<style>@media print { @page { size: A4 portrait; margin: 0; } }</style>');
-          printWindow.document.write('</head><body>');
-          printWindow.document.write(printRef.current.innerHTML);
-          printWindow.document.write('</body></html>');
-          printWindow.document.close();
-          setTimeout(() => {
-            printWindow.print();
-          }, 250);
-        }
-      }
-    }, 100);
+      win.print();
+      if (!downloadAsPdf) win.close();
+    }, 250);
+  };
+
+  // Print handler - persists the estimate first, then opens the print window
+  const handlePrint = async () => {
+    if (isPrinting) return;
+    try {
+      setIsPrinting(true);
+      const id = await ensureSavedForPrint();
+      if (!id) return;
+      setTimeout(() => openPrintWindow(false), 100);
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  // Download PDF handler - persists the estimate first, then opens the print window
+  const handleDownloadPDF = async () => {
+    if (isPrinting) return;
+    try {
+      setIsPrinting(true);
+      const id = await ensureSavedForPrint();
+      if (!id) return;
+      setTimeout(() => openPrintWindow(true), 100);
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   // Formatting helpers

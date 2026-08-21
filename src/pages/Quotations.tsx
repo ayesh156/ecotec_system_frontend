@@ -125,16 +125,20 @@ export const Quotations: React.FC = () => {
     return pages;
   }, [currentPage, totalPages]);
 
-  // Statistics
+  // Statistics — STRICT numeric aggregation (never string concatenation)
   const stats = useMemo(() => {
     const draft = quotations.filter(q => q.status === 'draft').length;
     const sent = quotations.filter(q => q.status === 'sent').length;
     const accepted = quotations.filter(q => q.status === 'accepted').length;
     const rejected = quotations.filter(q => q.status === 'rejected').length;
     const expired = quotations.filter(q => q.status === 'expired').length;
-    const totalValue = quotations.reduce((sum, q) => sum + q.total, 0);
-    const acceptedValue = quotations.filter(q => q.status === 'accepted').reduce((sum, q) => sum + q.total, 0);
-    const pendingValue = quotations.filter(q => q.status === 'sent').reduce((sum, q) => sum + q.total, 0);
+    const toNum = (v: unknown): number => {
+      const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const totalValue = quotations.reduce((sum, q) => sum + toNum(q.total), 0);
+    const acceptedValue = quotations.filter(q => q.status === 'accepted').reduce((sum, q) => sum + toNum(q.total), 0);
+    const pendingValue = quotations.filter(q => q.status === 'sent').reduce((sum, q) => sum + toNum(q.total), 0);
     const acceptanceRate = quotations.length > 0 ? Math.round((accepted / quotations.length) * 100) : 0;
     const avgValue = quotations.length > 0 ? totalValue / quotations.length : 0;
     return { total: quotations.length, draft, sent, accepted, rejected, expired, totalValue, acceptedValue, pendingValue, acceptanceRate, avgValue };
@@ -142,7 +146,19 @@ export const Quotations: React.FC = () => {
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
   const clearFilters = () => { setSearchQuery(''); setStatusFilter('all'); setStartDate(''); setEndDate(''); };
-  const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString('en-LK')}`;
+  // Clean currency formatting with locale separators (e.g. Rs. 390,075.00)
+  const formatCurrency = (amount: number) => {
+    const numeric = Number.isFinite(Number(amount)) ? Number(amount) : 0;
+    return `Rs. ${numeric.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+  // Compact currency for dashboard cards (e.g. Rs. 1.2M / Rs. 693.2K)
+  const formatCompactCurrency = (amount: number): { display: string; full: string } => {
+    const numeric = Number.isFinite(Number(amount)) ? Number(amount) : 0;
+    const abs = Math.abs(numeric);
+    if (abs >= 1_000_000) return { display: `Rs. ${(numeric / 1_000_000).toFixed(1)}M`, full: formatCurrency(numeric) };
+    if (abs >= 1_000) return { display: `Rs. ${(numeric / 1_000).toFixed(1)}K`, full: formatCurrency(numeric) };
+    return { display: formatCurrency(numeric), full: formatCurrency(numeric) };
+  };
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   // Calendar helpers
@@ -270,8 +286,8 @@ export const Quotations: React.FC = () => {
                 <TrendingUp className="w-3 h-3" /> Total
               </span>
             </div>
-            <p className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-              {formatCurrency(stats.totalValue)}
+            <p title={formatCompactCurrency(stats.totalValue).full} className={`text-xl sm:text-2xl font-bold truncate overflow-hidden ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+              {formatCompactCurrency(stats.totalValue).display}
             </p>
             <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>
               {stats.total} quotations
@@ -291,8 +307,8 @@ export const Quotations: React.FC = () => {
                 <Sparkles className="w-3 h-3" /> Won
               </span>
             </div>
-            <p className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-              {formatCurrency(stats.acceptedValue)}
+            <p title={formatCompactCurrency(stats.acceptedValue).full} className={`text-xl sm:text-2xl font-bold truncate overflow-hidden ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+              {formatCompactCurrency(stats.acceptedValue).display}
             </p>
             <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>
               {stats.accepted} accepted
@@ -312,8 +328,8 @@ export const Quotations: React.FC = () => {
                 <Target className="w-3 h-3" /> Pipeline
               </span>
             </div>
-            <p className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-              {formatCurrency(stats.pendingValue)}
+            <p title={formatCompactCurrency(stats.pendingValue).full} className={`text-xl sm:text-2xl font-bold truncate overflow-hidden ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+              {formatCompactCurrency(stats.pendingValue).display}
             </p>
             <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>
               {stats.sent} pending

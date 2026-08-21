@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { mockEstimates } from '../data/mockData';
-import type { Estimate, EstimateStatus } from '../data/mockData';
+import { toast } from 'sonner';
+import { estimateService, convertAPIEstimateToFrontend, type FrontendEstimate, type FrontendEstimateStatus } from '../services/estimateService';
 import { DeleteConfirmationModal } from '../components/modals/DeleteConfirmationModal';
 import { SearchableSelect } from '../components/ui/searchable-select';
-import { 
+import {
   FileText, Plus, Search, Eye, Edit, Trash2, Copy,
   Clock, User, Package, Calendar, DollarSign, CheckCircle,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X,
@@ -15,18 +15,20 @@ import {
 
 type ViewMode = 'grid' | 'table';
 
-const statusConfig: Record<EstimateStatus, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
+const statusConfig: Record<FrontendEstimateStatus, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
   'draft': { label: 'Draft', color: 'text-slate-500', bgColor: 'bg-slate-500/10', icon: <FileText className="w-4 h-4" /> },
   'sent': { label: 'Sent', color: 'text-blue-500', bgColor: 'bg-blue-500/10', icon: <Send className="w-4 h-4" /> },
   'accepted': { label: 'Accepted', color: 'text-emerald-500', bgColor: 'bg-emerald-500/10', icon: <CheckCircle className="w-4 h-4" /> },
   'rejected': { label: 'Rejected', color: 'text-red-500', bgColor: 'bg-red-500/10', icon: <XCircle className="w-4 h-4" /> },
   'expired': { label: 'Expired', color: 'text-amber-500', bgColor: 'bg-amber-500/10', icon: <AlertTriangle className="w-4 h-4" /> },
+  'converted': { label: 'Converted', color: 'text-teal-500', bgColor: 'bg-teal-500/10', icon: <CheckCircle className="w-4 h-4" /> },
 };
 
 export const Estimates: React.FC = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
-  const [estimates, setEstimates] = useState<Estimate[]>(mockEstimates);
+  const [estimates, setEstimates] = useState<FrontendEstimate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
@@ -42,7 +44,7 @@ export const Estimates: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
+  const [estimateToDelete, setEstimateToDelete] = useState<FrontendEstimate | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -51,6 +53,24 @@ export const Estimates: React.FC = () => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch estimates from live backend API
+  useEffect(() => {
+    const fetchEstimates = async () => {
+      setIsLoading(true);
+      try {
+        const result = await estimateService.getAll({ limit: 100 });
+        const converted = result.estimates.map(convertAPIEstimateToFrontend);
+        setEstimates(converted);
+      } catch (error) {
+        console.error('Failed to fetch estimates:', error);
+        toast.error('Failed to load estimates');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchEstimates();
   }, []);
 
   const filteredEstimates = useMemo(() => {
@@ -82,13 +102,9 @@ export const Estimates: React.FC = () => {
   }, [filteredEstimates, currentPage, itemsPerPage]);
 
   useEffect(() => { setCurrentPage(1); }, [searchQuery, statusFilter, startDate, endDate]);
-  useEffect(() => { 
-    if (viewMode === 'table') {
-      setItemsPerPage(10);
-    } else {
-      setItemsPerPage(9);
-    }
-    setCurrentPage(1); 
+  useEffect(() => {
+    setItemsPerPage(viewMode === 'table' ? 10 : 9);
+    setCurrentPage(1);
   }, [viewMode]);
 
   const getPageNumbers = useMemo(() => {
@@ -103,20 +119,27 @@ export const Estimates: React.FC = () => {
   }, [currentPage, totalPages]);
 
   const stats = useMemo(() => {
+    const toNum = (v: unknown): number => {
+      const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
     const draft = estimates.filter(e => e.status === 'draft').length;
     const sent = estimates.filter(e => e.status === 'sent').length;
     const accepted = estimates.filter(e => e.status === 'accepted').length;
     const rejected = estimates.filter(e => e.status === 'rejected').length;
     const expired = estimates.filter(e => e.status === 'expired').length;
-    const totalValue = estimates.reduce((sum, e) => sum + e.total, 0);
-    const acceptedValue = estimates.filter(e => e.status === 'accepted').reduce((sum, e) => sum + e.total, 0);
+    const totalValue = estimates.reduce((sum, e) => sum + toNum(e.total), 0);
+    const acceptedValue = estimates.filter(e => e.status === 'accepted').reduce((sum, e) => sum + toNum(e.total), 0);
     const acceptanceRate = estimates.length > 0 ? Math.round((accepted / estimates.length) * 100) : 0;
     return { total: estimates.length, draft, sent, accepted, rejected, expired, totalValue, acceptedValue, acceptanceRate };
   }, [estimates]);
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
   const clearFilters = () => { setSearchQuery(''); setStatusFilter('all'); setStartDate(''); setEndDate(''); };
-  const formatCurrency = (amount: number) => `Rs. ${amount.toLocaleString('en-LK')}`;
+  const formatCurrency = (amount: number) => {
+    const numeric = Number.isFinite(Number(amount)) ? Number(amount) : 0;
+    return `Rs. ${numeric.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const getDaysInMonth = (date: Date) => {
@@ -160,32 +183,37 @@ export const Estimates: React.FC = () => {
     );
   };
 
-  const handleView = (estimate: Estimate) => {
-    navigate(`/estimates/edit/${estimate.id}`, { state: { viewMode: true } });
+  // Action handlers — always use /system/* scoped paths
+  const handleView = (estimate: FrontendEstimate) => {
+    navigate(`/system/estimates/edit/${estimate.id}`, { state: { viewMode: true } });
   };
-
-  const handleEdit = (estimate: Estimate) => {
-    navigate(`/estimates/edit/${estimate.id}`);
+  const handleEdit = (estimate: FrontendEstimate) => {
+    navigate(`/system/estimates/edit/${estimate.id}`);
   };
-
-  const handleDuplicate = (estimate: Estimate) => {
-    navigate('/estimates/create', { state: { duplicateFrom: estimate } });
+  const handleDuplicate = (estimate: FrontendEstimate) => {
+    navigate('/system/estimates/create', { state: { duplicateFrom: estimate } });
   };
-
-  const handleDelete = (estimate: Estimate) => {
+  const handleDelete = (estimate: FrontendEstimate) => {
     setEstimateToDelete(estimate);
     setIsDeleteModalOpen(true);
   };
-
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (estimateToDelete) {
-      setEstimates(prev => prev.filter(e => e.id !== estimateToDelete.id));
+      try {
+        const apiId = estimateToDelete.apiId || estimateToDelete.id;
+        await estimateService.delete(apiId);
+        setEstimates(prev => prev.filter(e => e.id !== estimateToDelete.id));
+        toast.success(`Estimate ${estimateToDelete.estimateNumber} deleted`);
+      } catch (error) {
+        console.error('Failed to delete estimate:', error);
+        toast.error('Failed to delete estimate');
+      }
       setIsDeleteModalOpen(false);
       setEstimateToDelete(null);
     }
   };
 
-  const handleWhatsAppShare = (estimate: Estimate) => {
+  const handleWhatsAppShare = (estimate: FrontendEstimate) => {
     const message = `📋 *ESTIMATE - ${estimate.estimateNumber}*\n\n` +
       `Dear ${estimate.customerName},\n\n` +
       `Thank you for your inquiry. Please find your estimate details below:\n\n` +
@@ -212,8 +240,8 @@ export const Estimates: React.FC = () => {
           <h1 className={`text-2xl lg:text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Estimates</h1>
           <p className={`mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Create and manage price quotations for customers</p>
         </div>
-        <button 
-          onClick={() => navigate('/estimates/create')} 
+        <button
+          onClick={() => navigate('/system/estimates/create')}
           className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg hover:shadow-emerald-500/25"
         >
           <Plus className="w-5 h-5" />Create Estimate
@@ -225,7 +253,7 @@ export const Estimates: React.FC = () => {
         {[
           { label: 'Total Estimates', value: stats.total, icon: FileCheck, bg: 'blue' },
           { label: 'Pending', value: stats.sent, icon: Clock, bg: 'amber', sub: `${stats.draft} Drafts` },
-          { label: 'Accepted', value: `Rs. ${(stats.acceptedValue/1000).toFixed(0)}K`, icon: CheckCircle, bg: 'emerald', sub: `${stats.accepted} Estimates` },
+          { label: 'Accepted', value: formatCurrency(stats.acceptedValue), icon: CheckCircle, bg: 'emerald', sub: `${stats.accepted} Estimates` },
           { label: 'Acceptance Rate', value: `${stats.acceptanceRate}%`, icon: DollarSign, bg: 'purple', sub: `${stats.rejected} Rejected` }
         ].map((s, i) => (
           <div key={i} className={`p-4 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700/50' : 'bg-white border-slate-200 shadow-sm'}`}>
@@ -233,8 +261,8 @@ export const Estimates: React.FC = () => {
               <div className={`w-10 h-10 bg-${s.bg}-500/10 rounded-lg flex items-center justify-center`}>
                 <s.icon className={`w-5 h-5 text-${s.bg}-500`} />
               </div>
-              <div>
-                <p className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{s.value}</p>
+              <div className="min-w-0 flex-1">
+                <p className={`text-lg sm:text-xl font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{s.value}</p>
                 <p className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>{s.sub || s.label}</p>
               </div>
             </div>
@@ -245,15 +273,14 @@ export const Estimates: React.FC = () => {
       {/* Search and Filters */}
       <div className={`p-3 sm:p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700/50' : 'bg-white border-slate-200'}`}>
         <div className="flex flex-col lg:flex-row gap-3">
-          {/* Search */}
           <div className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl border flex-1 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
             <Search className={`w-5 h-5 flex-shrink-0 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
-            <input 
-              type="text" 
-              placeholder="Search estimates..." 
-              value={searchQuery} 
-              onChange={(e) => setSearchQuery(e.target.value)} 
-              className={`bg-transparent border-none outline-none flex-1 min-w-0 text-sm ${theme === 'dark' ? 'text-white placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'}`} 
+            <input
+              type="text"
+              placeholder="Search estimates..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`bg-transparent border-none outline-none flex-1 min-w-0 text-sm ${theme === 'dark' ? 'text-white placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'}`}
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} className={`p-1 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-slate-700' : 'hover:bg-slate-200'}`}>
@@ -262,9 +289,7 @@ export const Estimates: React.FC = () => {
             )}
           </div>
 
-          {/* Filters Row */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Filter Toggle Button */}
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-colors ${
@@ -284,7 +309,6 @@ export const Estimates: React.FC = () => {
               )}
             </button>
 
-            {/* Sort Button */}
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
               className={`p-2 rounded-xl border transition-colors ${theme === 'dark' ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
@@ -293,7 +317,6 @@ export const Estimates: React.FC = () => {
               {sortOrder === 'asc' ? <SortAsc className="w-4 h-4" /> : <SortDesc className="w-4 h-4" />}
             </button>
 
-            {/* View Mode Toggle */}
             <div className={`flex items-center rounded-xl overflow-hidden border ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
               <button
                 onClick={() => setViewMode('table')}
@@ -325,29 +348,25 @@ export const Estimates: React.FC = () => {
           </div>
         </div>
 
-        {/* Expanded Filters */}
         {showFilters && (
           <div className={`pt-3 sm:pt-4 mt-3 border-t ${theme === 'dark' ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center gap-3">
-              {/* Status Filter */}
               <div className="w-full sm:w-40">
-                <SearchableSelect 
-                  options={statusOptions} 
-                  value={statusFilter} 
-                  onValueChange={setStatusFilter} 
+                <SearchableSelect
+                  options={statusOptions}
+                  value={statusFilter}
+                  onValueChange={setStatusFilter}
                   placeholder="All Status"
                   theme={theme}
                 />
               </div>
 
-              {/* Date Range with Calendar */}
-              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2 sm:col-span-1 lg:col-span-1">
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
                 <div className="flex items-center gap-1.5">
                   <Calendar className={`w-4 h-4 flex-shrink-0 ${theme === 'dark' ? 'text-emerald-500' : 'text-emerald-600'}`} />
                   <span className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Date</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Start Date */}
                   <div className="relative flex-1" ref={startCalendarRef}>
                     <button
                       onClick={() => {
@@ -356,8 +375,8 @@ export const Estimates: React.FC = () => {
                         setCalendarMonth(startDate ? new Date(startDate) : new Date());
                       }}
                       className={`w-full px-3 py-2 sm:py-1.5 rounded-xl border text-sm text-left transition-colors ${
-                        theme === 'dark' 
-                          ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-700/50' 
+                        theme === 'dark'
+                          ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-700/50'
                           : 'bg-slate-50 border-slate-200 text-slate-900 hover:bg-slate-100'
                       }`}
                     >
@@ -366,7 +385,6 @@ export const Estimates: React.FC = () => {
                     {showStartCalendar && renderCalendar(startDate, setStartDate, setShowStartCalendar)}
                   </div>
                   <span className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>to</span>
-                  {/* End Date */}
                   <div className="relative flex-1" ref={endCalendarRef}>
                     <button
                       onClick={() => {
@@ -375,8 +393,8 @@ export const Estimates: React.FC = () => {
                         setCalendarMonth(endDate ? new Date(endDate) : new Date());
                       }}
                       className={`w-full px-3 py-2 sm:py-1.5 rounded-xl border text-sm text-left transition-colors ${
-                        theme === 'dark' 
-                          ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-700/50' 
+                        theme === 'dark'
+                          ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-700/50'
                           : 'bg-slate-50 border-slate-200 text-slate-900 hover:bg-slate-100'
                       }`}
                     >
@@ -387,7 +405,6 @@ export const Estimates: React.FC = () => {
                 </div>
               </div>
 
-              {/* Clear Filters Button */}
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
@@ -405,15 +422,29 @@ export const Estimates: React.FC = () => {
         )}
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className={`p-5 rounded-2xl border animate-pulse ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white border-slate-200'}`}>
+              <div className="h-4 w-24 bg-slate-700/30 rounded mb-3" />
+              <div className="h-3 w-16 bg-slate-700/20 rounded mb-4" />
+              <div className="h-16 bg-slate-700/20 rounded-xl mb-4" />
+              <div className="h-12 bg-slate-700/20 rounded-xl" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Grid View */}
-      {viewMode === 'grid' && (
+      {viewMode === 'grid' && !isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {paginatedEstimates.map((estimate) => (
-            <div 
-              key={estimate.id} 
+            <div
+              key={estimate.id}
               className={`p-4 rounded-2xl border transition-all hover:shadow-lg ${
-                theme === 'dark' 
-                  ? 'bg-slate-800/50 border-slate-700/50 hover:border-slate-600' 
+                theme === 'dark'
+                  ? 'bg-slate-800/50 border-slate-700/50 hover:border-slate-600'
                   : 'bg-white border-slate-200 hover:border-slate-300'
               }`}
             >
@@ -459,7 +490,7 @@ export const Estimates: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between mb-3">
-                <p className={`text-xl font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                <p className={`text-xl font-bold truncate ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
                   {formatCurrency(estimate.total)}
                 </p>
                 {estimate.convertedToInvoice && (
@@ -471,39 +502,20 @@ export const Estimates: React.FC = () => {
 
               <div className={`flex items-center justify-between pt-3 border-t ${theme === 'dark' ? 'border-slate-700/50' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => handleView(estimate)} 
-                    className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600'}`}
-                    title="View"
-                  >
+                  <button onClick={() => handleView(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600'}`} title="View">
                     <Eye className="w-4 h-4" />
                   </button>
-                  <button 
-                    onClick={() => handleEdit(estimate)} 
-                    className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`}
-                    title="Edit"
-                  >
+                  <button onClick={() => handleEdit(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`} title="Edit">
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button 
-                    onClick={() => handleDuplicate(estimate)} 
-                    className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400' : 'hover:bg-emerald-50 text-slate-600 hover:text-emerald-600'}`}
-                    title="Duplicate"
-                  >
+                  <button onClick={() => handleDuplicate(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400' : 'hover:bg-emerald-50 text-slate-600 hover:text-emerald-600'}`} title="Duplicate">
                     <Copy className="w-4 h-4" />
                   </button>
-                  <button 
-                    onClick={() => handleDelete(estimate)} 
-                    className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-50 text-slate-600 hover:text-red-600'}`}
-                    title="Delete"
-                  >
+                  <button onClick={() => handleDelete(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-50 text-slate-600 hover:text-red-600'}`} title="Delete">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <button 
-                  onClick={() => handleWhatsAppShare(estimate)} 
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${theme === 'dark' ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
-                >
+                <button onClick={() => handleWhatsAppShare(estimate)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${theme === 'dark' ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
                   <MessageCircle className="w-3.5 h-3.5" />
                   WhatsApp
                 </button>
@@ -514,19 +526,14 @@ export const Estimates: React.FC = () => {
       )}
 
       {/* Table View */}
-      {viewMode === 'table' && (
+      {viewMode === 'table' && !isLoading && (
         <div className={`rounded-2xl border overflow-hidden ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700/50' : 'bg-white border-slate-200'}`}>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className={theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'}>
                   {['Estimate', 'Customer', 'Date', 'Expires', 'Items', 'Total', 'Status', 'Actions'].map(h => (
-                    <th 
-                      key={h} 
-                      className={`px-4 py-3 text-${h === 'Actions' ? 'right' : 'left'} text-xs font-semibold uppercase tracking-wider ${
-                        theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-                      }`}
-                    >
+                    <th key={h} className={`px-4 py-3 text-${h === 'Actions' ? 'right' : 'left'} text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                       {h}
                     </th>
                   ))}
@@ -536,40 +543,18 @@ export const Estimates: React.FC = () => {
                 {paginatedEstimates.map((estimate) => (
                   <tr key={estimate.id} className={theme === 'dark' ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'}>
                     <td className="px-4 py-3">
-                      <p className={`font-mono font-bold text-sm ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                        {estimate.estimateNumber}
-                      </p>
+                      <p className={`font-mono font-bold text-sm ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{estimate.estimateNumber}</p>
                     </td>
                     <td className="px-4 py-3">
                       <div>
-                        <p className={`font-medium text-sm ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                          {estimate.customerName}
-                        </p>
-                        <p className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>
-                          {estimate.customerPhone}
-                        </p>
+                        <p className={`font-medium text-sm ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{estimate.customerName}</p>
+                        <p className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>{estimate.customerPhone}</p>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-                        {formatDate(estimate.estimateDate)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-                        {formatDate(estimate.expiryDate)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-                        {estimate.items.length}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className={`font-semibold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                        {formatCurrency(estimate.total)}
-                      </p>
-                    </td>
+                    <td className="px-4 py-3"><p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{formatDate(estimate.estimateDate)}</p></td>
+                    <td className="px-4 py-3"><p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{formatDate(estimate.expiryDate)}</p></td>
+                    <td className="px-4 py-3"><span className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{estimate.items.length}</span></td>
+                    <td className="px-4 py-3"><p className={`font-semibold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{formatCurrency(estimate.total)}</p></td>
                     <td className="px-4 py-3">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 w-fit ${statusConfig[estimate.status].bgColor} ${statusConfig[estimate.status].color}`}>
                         {statusConfig[estimate.status].icon}
@@ -578,37 +563,11 @@ export const Estimates: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button 
-                          onClick={() => handleView(estimate)} 
-                          className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600'}`}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleEdit(estimate)} 
-                          className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDuplicate(estimate)} 
-                          className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400' : 'hover:bg-emerald-50 text-slate-600 hover:text-emerald-600'}`}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleWhatsAppShare(estimate)} 
-                          className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-green-500/20 text-slate-400 hover:text-green-400' : 'hover:bg-green-50 text-slate-600 hover:text-green-600'}`}
-                          title="WhatsApp"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(estimate)} 
-                          className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-50 text-slate-600 hover:text-red-600'}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <button onClick={() => handleView(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => handleEdit(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'}`}><Edit className="w-4 h-4" /></button>
+                        <button onClick={() => handleDuplicate(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400' : 'hover:bg-emerald-50 text-slate-600 hover:text-emerald-600'}`}><Copy className="w-4 h-4" /></button>
+                        <button onClick={() => handleWhatsAppShare(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-green-500/20 text-slate-400 hover:text-green-400' : 'hover:bg-green-50 text-slate-600 hover:text-green-600'}`} title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>
+                        <button onClick={() => handleDelete(estimate)} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-50 text-slate-600 hover:text-red-600'}`}><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -620,7 +579,7 @@ export const Estimates: React.FC = () => {
       )}
 
       {/* Empty State */}
-      {paginatedEstimates.length === 0 && (
+      {!isLoading && paginatedEstimates.length === 0 && (
         <div className={`flex flex-col items-center justify-center py-16 rounded-2xl ${theme === 'dark' ? 'bg-slate-800/50 border border-slate-700/50' : 'bg-white border border-slate-200'}`}>
           <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 mb-4">
             <FileCheck className="w-12 h-12 text-emerald-500" />
@@ -629,9 +588,13 @@ export const Estimates: React.FC = () => {
           <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
             {hasActiveFilters ? 'Try adjusting your filters' : 'Start by creating your first estimate'}
           </p>
-          {hasActiveFilters && (
+          {hasActiveFilters ? (
             <button onClick={clearFilters} className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl font-medium">
               <RefreshCw className="w-4 h-4" />Clear Filters
+            </button>
+          ) : (
+            <button onClick={() => navigate('/system/estimates/create')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium">
+              <Plus className="w-4 h-4" />Create Estimate
             </button>
           )}
         </div>
@@ -641,34 +604,19 @@ export const Estimates: React.FC = () => {
       {filteredEstimates.length > 0 && (
         <div className={`mt-4 p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700/50' : 'bg-white border-slate-200'}`}>
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            {/* Left side - Info and Items Per Page */}
             <div className="flex flex-wrap items-center gap-4">
-              {/* Result Info */}
               <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                 Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
                 <span className="font-semibold">{Math.min(currentPage * itemsPerPage, filteredEstimates.length)}</span> of{' '}
                 <span className="font-semibold">{filteredEstimates.length}</span> estimates
               </p>
-              
-              {/* Items Per Page Selector */}
               <div className="flex items-center gap-2">
                 <span className={`text-sm ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Show:</span>
                 <div className={`flex items-center rounded-full p-0.5 ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
                   {(viewMode === 'table' ? [10, 20, 50] : [6, 9, 12]).map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => {
-                        setItemsPerPage(num);
-                        setCurrentPage(1);
-                      }}
-                      className={`px-3 py-1 rounded-full text-sm font-medium transition-all ${
-                        itemsPerPage === num
-                          ? 'bg-emerald-500 text-white shadow-md'
-                          : theme === 'dark'
-                            ? 'text-slate-400 hover:text-white'
-                            : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
+                    <button key={num} onClick={() => { setItemsPerPage(num); setCurrentPage(1); }} className={`px-3 py-1 rounded-full text-sm font-medium transition-all ${
+                      itemsPerPage === num ? 'bg-emerald-500 text-white shadow-md' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                    }`}>
                       {num}
                     </button>
                   ))}
@@ -676,96 +624,32 @@ export const Estimates: React.FC = () => {
               </div>
             </div>
 
-            {/* Right side - Pagination Controls */}
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
-                {/* First Page */}
-                <button
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  className={`p-2 rounded-lg transition-colors ${
-                    currentPage === 1
-                      ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed'
-                      : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
-                  }`}
-                  title="First page"
-                >
-                  <ChevronsLeft className="w-4 h-4" />
-                </button>
-
-                {/* Previous Page */}
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className={`p-2 rounded-lg transition-colors ${
-                    currentPage === 1
-                      ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed'
-                      : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
-                  }`}
-                  title="Previous page"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                {/* Page Numbers */}
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className={`p-2 rounded-lg transition-colors ${
+                  currentPage === 1 ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed' : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
+                }`} title="First page"><ChevronsLeft className="w-4 h-4" /></button>
+                <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className={`p-2 rounded-lg transition-colors ${
+                  currentPage === 1 ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed' : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
+                }`} title="Previous page"><ChevronLeft className="w-4 h-4" /></button>
                 <div className="hidden sm:flex items-center gap-1">
                   {getPageNumbers.map((page, index) => (
                     page === '...' ? (
-                      <span key={`ellipsis-${index}`} className={`px-2 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
-                        ...
-                      </span>
+                      <span key={`ellipsis-${index}`} className={`px-2 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>...</span>
                     ) : (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page as number)}
-                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
-                          currentPage === page
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
-                            : theme === 'dark'
-                              ? 'hover:bg-slate-700 text-slate-300'
-                              : 'hover:bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {page}
-                      </button>
+                      <button key={page} onClick={() => setCurrentPage(page as number)} className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
+                        currentPage === page ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25' : theme === 'dark' ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+                      }`}>{page}</button>
                     )
                   ))}
                 </div>
-
-                {/* Mobile Page Indicator */}
-                <div className={`sm:hidden px-3 py-1 rounded-lg text-sm font-medium ${
-                  theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'
-                }`}>
-                  {currentPage} / {totalPages}
-                </div>
-
-                {/* Next Page */}
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className={`p-2 rounded-lg transition-colors ${
-                    currentPage === totalPages
-                      ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed'
-                      : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
-                  }`}
-                  title="Next page"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                {/* Last Page */}
-                <button
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages}
-                  className={`p-2 rounded-lg transition-colors ${
-                    currentPage === totalPages
-                      ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed'
-                      : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
-                  }`}
-                  title="Last page"
-                >
-                  <ChevronsRight className="w-4 h-4" />
-                </button>
+                <div className={`sm:hidden px-3 py-1 rounded-lg text-sm font-medium ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>{currentPage} / {totalPages}</div>
+                <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className={`p-2 rounded-lg transition-colors ${
+                  currentPage === totalPages ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed' : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
+                }`} title="Next page"><ChevronRight className="w-4 h-4" /></button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className={`p-2 rounded-lg transition-colors ${
+                  currentPage === totalPages ? theme === 'dark' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed' : theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-600'
+                }`} title="Last page"><ChevronsRight className="w-4 h-4" /></button>
               </div>
             )}
           </div>
@@ -773,13 +657,13 @@ export const Estimates: React.FC = () => {
       )}
 
       {/* Delete Modal */}
-      <DeleteConfirmationModal 
-        isOpen={isDeleteModalOpen} 
-        onCancel={() => setIsDeleteModalOpen(false)} 
-        onConfirm={confirmDelete} 
-        title="Delete Estimate" 
-        message={`Delete estimate "${estimateToDelete?.estimateNumber}"? This action cannot be undone.`} 
-        itemName={estimateToDelete?.estimateNumber || ''} 
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onCancel={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Estimate"
+        message={`Delete estimate "${estimateToDelete?.estimateNumber}"? This action cannot be undone.`}
+        itemName={estimateToDelete?.estimateNumber || ''}
       />
     </div>
   );
